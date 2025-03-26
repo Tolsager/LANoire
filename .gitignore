@@ -6,6 +6,8 @@ shortened_dataset/
 __pycache__/
 *.py[cod]
 *$py.class
+*.pkl
+data
 
 # C extensions
 *.so
