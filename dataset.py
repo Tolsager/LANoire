@@ -32,13 +32,16 @@ class LANoireDataset(Dataset):
         self.id_to_subject = {value["id"]: key for key, value in self.subjects.items()}
         self.id_to_case = {values["id"]: case for case, values in self.cases.items()}
 
+        # Manual insertion of missing subjects
+        # self.id_to_subject[16] = "elsa_lichtmann"
+
     def __len__(self):
         return len(self.answers)
 
-    def __getitem__(self, idx: int):
-        return self.prepare_modalities(idx)
+    def __getitem__(self, idx: int, debug: bool = False):
+        return self.prepare_modalities(idx, debug)
 
-    def prepare_modalities(self, idx: int):
+    def prepare_modalities(self, idx: int, debug: bool = False):
         if not self.modalities:
             raise ValueError("Must have at least one modality")
 
@@ -47,11 +50,13 @@ class LANoireDataset(Dataset):
         question: str = self.questions[f"q{question_id}"]["name"]
         subject_name: str = self.id_to_subject[answer["subject id"]]
         case_id: int = self.subjects[subject_name]["case id"]
-        case: str = self.id_to_case[case_id]  # e.g., "16_the_naked_city"
+        case: str = self.id_to_case[case_id]  # e.g. "16_the_naked_city"
         label: int = self.class_map[answer["class"]]
 
         directory: Path = Path(f"shortened_dataset/{case}/{subject_name}")
         filename: str = answer["name"].removesuffix(".mp3")
+
+        subject_name: str = self.subjects[subject_name]["name"]
 
         data = []
 
@@ -61,20 +66,37 @@ class LANoireDataset(Dataset):
                 question_text: str = self.questions[f"q{question_id}"]["text"]
                 data.append({"q": question_text, "a": answer_text})
             elif modality == Modality.AUDIO:
-                question_audio, _ = librosa.load(directory / f"{question}/{subject_name}_question_{question[1:]}.mp3")
-                answer_audio, _ = librosa.load(directory / f"{question}/{filename}.mp3")
-                data.append({"question": question_audio, "answer": answer_audio})
+                if debug:
+                    question_dir = directory / f"{question}/{subject_name}_question_{question[1:]}.mp3"
+                    answer_dir = directory / f"{question}/{filename}.mp3"
+                    assert (question_dir).exists(), f"Invalid directory: {question_dir}"
+                    assert (answer_dir).exists(), f"Invalid directory: {answer_dir}"
+                    data.append({"question": str(question_dir), "answer": str(answer_dir)})
+                else:
+                    question_audio, _ = librosa.load(directory / f"{question}/{subject_name}_question_{question[1:]}.mp3")
+                    answer_audio, _ = librosa.load(directory / f"{question}/{filename}.mp3")
+                    data.append({"question": question_audio, "answer": answer_audio})
             elif modality == Modality.VIDEO:
-                video_frames = [np.asarray(Image.open(frame)) for frame in glob.glob(str(directory / f"original/{filename}*.png"))]
-                data.append(np.array(video_frames))
+                if debug:
+                    video_dir = directory / f"original/{filename}"
+                    
+                    assert len(glob.glob(str(video_dir) + "*.png")) > 0, f"Missing video frames {video_dir}"
+                    data.append(2)
+                else:
+                    video_frames = [np.asarray(Image.open(frame)) for frame in glob.glob(str(directory / f"original/{filename}*.png"))]
+                    data.append(np.array(video_frames))
 
         data.append(label)
         return tuple(data)
     
 if __name__ == '__main__':
-    dataset = LANoireDataset(modalities=(Modality.TEXT,))
+    dataset = LANoireDataset(modalities=(Modality.TEXT, Modality.AUDIO,))
     
+    indices = [131, 132, 133, 134, 135, 136, 456, 457, 458, 459, 460, 461, 462]
 
     import tqdm
+    # for idx in indices:
+    #     text, audio, video, label = dataset.__getitem__(idx, debug=True)
+
     for i in tqdm.tqdm(range(len(dataset))):
-        text, label = dataset[i]
+        text, audio, label = dataset.__getitem__(i, debug=True)
