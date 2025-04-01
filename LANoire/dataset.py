@@ -1,10 +1,11 @@
 from enum import IntEnum
 import json
 import glob
-import numpy as np
-import librosa
-from PIL import Image
+import torch
+import torchaudio
+import torchvision
 from pathlib import Path
+
 from torch.utils.data import Dataset
 
 
@@ -73,8 +74,14 @@ class LANoireDataset(Dataset):
                     assert (answer_dir).exists(), f"Invalid directory: {answer_dir}"
                     data.append({"question": str(question_dir), "answer": str(answer_dir)})
                 else:
-                    question_audio, _ = librosa.load(directory / f"{question}/{subject_name}_question_{question[1:]}.mp3")
-                    answer_audio, _ = librosa.load(directory / f"{question}/{filename}.mp3")
+                    question_audio, _ = torchaudio.load(directory / f"{question}/{subject_name}_question_{question[1:]}.mp3")
+                    answer_audio, _ = torchaudio.load(directory / f"{question}/{filename}.mp3")
+
+                    if len(question_audio.shape) > 1:
+                        question_audio = question_audio.mean(dim=0)
+                    if len(answer_audio.shape) > 1:
+                        answer_audio = answer_audio.mean(dim=0)
+                    
                     data.append({"question": question_audio, "answer": answer_audio})
             elif modality == Modality.VIDEO:
                 if debug:
@@ -83,8 +90,8 @@ class LANoireDataset(Dataset):
                     assert len(glob.glob(str(video_dir) + "*.png")) > 0, f"Missing video frames {video_dir}"
                     data.append(2)
                 else:
-                    video_frames = [np.asarray(Image.open(frame)) for frame in glob.glob(str(directory / f"original/{filename}*.png"))]
-                    data.append(np.array(video_frames))
+                    video_frames = [torchvision.io.read_image(frame) for frame in glob.glob(str(directory / f"original/{filename}*.png"))]
+                    data.append(torch.tensor(video_frames))
 
         data.append(label)
         return tuple(data)
@@ -92,11 +99,9 @@ class LANoireDataset(Dataset):
 if __name__ == '__main__':
     dataset = LANoireDataset(modalities=(Modality.TEXT, Modality.AUDIO,))
     
-    indices = [131, 132, 133, 134, 135, 136, 456, 457, 458, 459, 460, 461, 462]
+    #indices = [131, 132, 133, 134, 135, 136, 456, 457, 458, 459, 460, 461, 462]
 
     import tqdm
-    # for idx in indices:
-    #     text, audio, video, label = dataset.__getitem__(idx, debug=True)
 
     for i in tqdm.tqdm(range(len(dataset))):
         text, audio, label = dataset.__getitem__(i, debug=True)
