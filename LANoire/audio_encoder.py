@@ -7,7 +7,6 @@ import typing
 import librosa
 import lightning as L
 import torch
-"data\1_buyers_beware\clovis_galletta\q1\clovis_galletta_lie_0.mp3"
 
 def get_whisper_embeddings(audio: npt.NDArray, sampling_rate: int):
     model = transformers.WhisperFeautureExtractor().from_pretrained("openai/whisper-tiny.en")
