@@ -3,6 +3,9 @@ import transformers
 import glob
 import os
 import typing
+import sys
+from LANoire.dataset import LANoireDataset
+from LANoire.utils import save_pickle
 
 import librosa
 import lightning as L
@@ -14,25 +17,26 @@ def get_whisper_embeddings(audio: npt.NDArray, sampling_rate: int):
 
 
 class CLAPAudioDS(torch.utils.data.Dataset):
-    def __init__(self, model_name: str):
-        self.file_paths = glob.glob("data/*/*/*/*.mp3")
-        self.file_names = [os.path.split(p)[1] for p in self.file_paths]
+    def __init__(self, model_name: str = "laion/clap-htsat-fused"):
         self.processor = transformers.ClapFeatureExtractor.from_pretrained(model_name)
         self.CLAP_sr = 48000
+        self.ds = LANoireDataset()
 
     def __len__(self):
-        return len(self.file_paths)
+        return len(self.ds)
 
     def __getitem__(self, idx: int) -> dict[str, typing.Any]:
-        file_path = self.file_paths[idx]
-        audio, _ = librosa.load(file_path, sr=self.CLAP_sr)
+        audio, label = self.ds[idx]
+        audio = audio["answer"]
+        audio = librosa.resample(audio, orig_sr=22050, target_sr=self.CLAP_sr)
+
         features = self.processor(
             audio, sampling_rate=self.CLAP_sr, return_tensors="pt"
         )
         features["input_features"] = features["input_features"][0]
         features["is_longer"] = features["is_longer"][0]
-        file_name = self.file_names[idx]
-        return {**features, "file_name": file_name}
+        features["label"] = label
+        return features
 
 
 class CLAPModel(L.LightningModule):
@@ -41,20 +45,28 @@ class CLAPModel(L.LightningModule):
         self.model = transformers.ClapAudioModelWithProjection.from_pretrained(
             model_name
         )
+        self.test_step_outputs = []
 
-    def forward(self, batch: dict):
+    def forward(self, input_features: torch.Tensor, is_longer: torch.Tensor) -> torch.Tensor:
+        return self.model(input_features=input_features, is_longer=is_longer).audio_embeds
+    
+    def test_step(self, batch: dict):
         input_features = batch["input_features"]
         is_longer = batch["is_longer"]
-        file_names = batch["file_name"]
-        return (
-            self.model(input_features=input_features, is_longer=is_longer).audio_embeds,
-            file_names,
-        )
+        label = batch["label"]
+        embeds = self(input_features, is_longer)
+        self.test_step_outputs.append((embeds, label))
+    
+    def on_test_epoch_end(self):
+        embeddings = torch.cat([x[0] for x in self.test_step_outputs], dim=0)
+        labels = [x[1] for x in self.test_step_outputs]
+        save_pickle("CLAP_embeddings.pkl", (embeddings, labels))
+
 
 
 class CLAPDataModule(L.LightningDataModule):
     def __init__(
-        self, model_name: str = "laion/clap-htsat-fused", batch_size: int = 16, num_workers: int = 7, pin_memory: bool = False, persistent_workers: bool = True
+        self, model_name: str = "laion/clap-htsat-fused", batch_size: int = 16, num_workers: int = 7, pin_memory: bool = False, persistent_workers: bool = False
     ):
         super().__init__()
         self.model_name = model_name
@@ -63,7 +75,7 @@ class CLAPDataModule(L.LightningDataModule):
         self.pin_memory = pin_memory
         self.persistent_workers = persistent_workers
 
-    def predict_dataloader(self):
+    def test_dataloader(self):
         ds = CLAPAudioDS(self.model_name)
         return torch.utils.data.DataLoader(
             ds, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers, pin_memory=self.pin_memory, persistent_workers=self.persistent_workers

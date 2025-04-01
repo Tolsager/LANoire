@@ -90,7 +90,8 @@ class LANoireDataset(Dataset):
         return tuple(data)
     
 if __name__ == '__main__':
-    dataset = LANoireDataset(modalities=(Modality.TEXT, Modality.AUDIO,))
+    # dataset = LANoireDataset(modalities=(Modality.TEXT, Modality.AUDIO,))
+    dataset = LANoireDataset(modalities=(Modality.AUDIO,))
     
     indices = [131, 132, 133, 134, 135, 136, 456, 457, 458, 459, 460, 461, 462]
 
