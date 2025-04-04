@@ -1,4 +1,5 @@
 import numpy.typing as npt
+import torchaudio
 import transformers
 import glob
 import os
@@ -20,22 +21,23 @@ class CLAPAudioDS(torch.utils.data.Dataset):
     def __init__(self, model_name: str = "laion/clap-htsat-fused"):
         self.processor = transformers.ClapFeatureExtractor.from_pretrained(model_name)
         self.CLAP_sr = 48000
-        self.ds = LANoireDataset()
+        self.ds = LANoireDataset("data/raw/data.json")
+        self.resampler = torchaudio.transforms.Resample(orig_freq=44_100, new_freq=self.CLAP_sr)
 
     def __len__(self):
         return len(self.ds)
 
     def __getitem__(self, idx: int) -> dict[str, typing.Any]:
-        audio, label = self.ds[idx]
-        audio = audio["answer"]
-        audio = librosa.resample(audio, orig_sr=22050, target_sr=self.CLAP_sr)
+        audio = self.ds[idx][0]["answer"]
+        # audio = audio["answer"].numpy()
+        # audio = librosa.resample(audio, orig_sr=22050, target_sr=self.CLAP_sr)
+        audio = self.resampler(audio)
 
         features = self.processor(
             audio, sampling_rate=self.CLAP_sr, return_tensors="pt"
         )
         features["input_features"] = features["input_features"][0]
         features["is_longer"] = features["is_longer"][0]
-        features["label"] = label
         return features
 
 
@@ -53,14 +55,12 @@ class CLAPModel(L.LightningModule):
     def test_step(self, batch: dict):
         input_features = batch["input_features"]
         is_longer = batch["is_longer"]
-        label = batch["label"]
         embeds = self(input_features, is_longer)
-        self.test_step_outputs.append((embeds, label))
+        self.test_step_outputs.append(embeds)
     
     def on_test_epoch_end(self):
-        embeddings = torch.cat([x[0] for x in self.test_step_outputs], dim=0)
-        labels = [x[1] for x in self.test_step_outputs]
-        save_pickle("CLAP_embeddings.pkl", (embeddings, labels))
+        embeddings = torch.cat(self.test_step_outputs, dim=0)
+        save_pickle("CLAP_embeddings.pkl", embeddings)
 
 
 
