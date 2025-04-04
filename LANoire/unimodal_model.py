@@ -1,44 +1,69 @@
 import lightning as L
+from LANoire.dataset import LANoireDataset, get_data_split_ids
 import numpy.typing as npt
 import numpy as np
 from utils import load_pickle
 import torch
-from sklearn.model_selection import train_test_split
+from torchmetrics.classification import BinaryAccuracy
 
-class CLAPMLP(L.LightningModule):
-    def __init__(self):
+class ClapMlp(L.LightningModule):
+    def __init__(self, lr: float = 1e-3):
         super().__init__()
-
-
-class CLAPMLPDM(L.LightningDataModule):
-    def __init__(self, batch_size: int = 16, num_workers: int = 7, pin_memory: bool = False, persistent_workers: bool = True):
-        super().__init__()
+        self.relu = torch.nn.ReLU()
+        self.fc1 = torch.nn.Linear(200, 200)
+        self.fc2 = torch.nn.Linear(200, 1)
+        self.criterion = torch.nn.BCEWithLogitsLoss()
+        self.train_acc = BinaryAccuracy()
+        self.val_acc = BinaryAccuracy()
+        self.lr = lr
     
-    def prepare_data(self):
-        self.ds_inputs = embed_dict_to_ds_inputs(load_pickle("CLAP_embeds.pkl"))
-
-    def setup(self, stage: str = "fit"):
-        labels = self.ds_inputs[1].numpy()
-        indices = np.arange(len(labels))
-        train_indices, val_indices = train_test_split(indices, stratify=labels, test_size=0.2)
-        val_indices, test_indices = train_test_split(val_indices, stratify=labels[val_indices], test_size=0.5)
-
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
+    
+    def training_step(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        x, y = batch
+        pred = self(x)
+        loss = self.criterion(pred, y)
+        self.train_acc(pred, y.int())
+        self.log('train_acc_epoch', self.train_acc, on_epoch=True)
+        return loss
+    
+    def validation_step(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        x, y = batch
+        pred = self(x)
+        self.val_acc(pred, y.int())
+        self.log('val_acc_epoch', self.val_acc, on_epoch=True)
+    
+    def configure_optimizers(self):
+        return torch.optim.AdamW(self.parameters(), lr=self.lr)
         
-        if stage == "fit":
-            embeds = self.ds_inputs[train_indices]
-            labels = self.ds_inputs[1][train_indices]
-            filenames = self.ds_inputs[2][train_indices]
-            self.train_ds = CLAPMLPDS((embeds, labels, filenames), stage="fit")
-        elif stage == "validate":
-            embeds = self.ds_inputs[val_indices]
-            labels = self.ds_inputs[1][val_indices]
-            filenames = self.ds_inputs[2][val_indices]
-            self.val_ds = CLAPMLPDS((embeds, labels, filenames), stage="fit")
-        elif stage == "test":
-            embeds = self.ds_inputs[test_indices]
-            labels = self.ds_inputs[1][test_indices]
-            filenames = self.ds_inputs[2][test_indices]
-            self.test_ds = CLAPMLPDS((embeds, labels, filenames), stage="fit")
+
+
+class ClapDm(L.LightningDataModule):
+    def __init__(self, train_batch_size: int = 32, eval_batch_frac: float = 1.5, **kwargs):
+        super().__init__()
+        self.train_batch_size = train_batch_size
+        self.eval_batch_size = int(train_batch_size * eval_batch_frac)
+        self.kwargs = kwargs
+    
+    def setup(self, stage: str = None) -> None:
+        self.train_indices, self.val_indices, self.test_indices = get_data_split_ids()
+        # ds = ClapDs()
+        self.train_ds = torch.utils.data.Subset(ds, self.train_indices)
+        self.val_ds = torch.utils.data.Subset(ds, self.val_indices)
+        self.test_ds = torch.utils.data.Subset(ds, self.test_indices)
+    
+    def train_dataloader(self) -> torch.utils.data.DataLoader:
+        return torch.utils.data.DataLoader(self.train_ds, batch_size=self.train_batch_size, **self.kwargs)
+
+    def val_dataloader(self) -> torch.utils.data.DataLoader:
+        return torch.utils.data.DataLoader(self.val_ds, batch_size=self.eval_batch_size, **self.kwargs)
+    
+    def test_dataloader(self) -> torch.utils.data.DataLoader:
+        return torch.utils.data.DataLoader(self.val_ds, batch_size=self.eval_batch_size, **self.kwargs)
+
         
     
 def embed_dict_to_ds_inputs(embed_dict: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor, npt.NDArray]:
@@ -50,25 +75,4 @@ def embed_dict_to_ds_inputs(embed_dict: dict[str, torch.Tensor]) -> tuple[torch.
     labels = torch.tensor([0 if "_lie_" in f else 1 for f in filenames])
     embeddings = torch.stack(embeddings, dim=0)
     return (embeddings, labels, np.array(filenames))
-
-
-class CLAPMLPDS(torch.utils.data.Dataset):
-    def __init__(self, ds_inputs: tuple[torch.tensor, torch.tensor, npt.NDArray], stage: str = "fit"):
-        super().__init__()
-        self.ds_inputs = ds_inputs
-        self.stage = stage
-        if stage not in ["fit", "validate", "test"]:
-            raise ValueError("stage must be one of 'fit', 'validate', 'test'")
-    
-    def __len__(self):
-        return len(self.ds_inputs[1])
-    
-    def __getitem__(self, index: int):
-        if self.stage == "fit":
-            return self.ds_inputs[0][index], self.ds_inputs[1][index]
-        elif self.state == "validate" or self.state == "test":
-            return self.ds_inputs[0][index], self.ds_inputs[1][index], self.ds_inputs[2][index]
-    
-
-
 

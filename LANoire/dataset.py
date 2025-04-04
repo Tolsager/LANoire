@@ -20,11 +20,12 @@ class Modality(IntEnum):
 
 
 class LANoireDataset(Dataset):
-    def __init__(self, json_path: str = "data/data.json", modalities: tuple[Modality] = (Modality.AUDIO,)):
+    def __init__(self, json_path: str = "data/raw/data.json", modalities: tuple[Modality]|None = (Modality.AUDIO,)):
         with open(json_path, "r") as f:
             data_json = json.load(f)
 
-        self.modalities = set(modalities)  # Store as a set for quick lookups
+        if modalities is not None:
+            self.modalities = set(modalities)  # Store as a set for quick lookups
         self.cases = data_json["cases"][0]
         self.subjects = data_json["subjects"][0]
         self.questions = data_json["questions"][0]
@@ -44,8 +45,8 @@ class LANoireDataset(Dataset):
         return self.prepare_modalities(idx, debug)
 
     def prepare_modalities(self, idx: int, debug: bool = False):
-        if not self.modalities:
-            raise ValueError("Must have at least one modality")
+        # if not self.modalities:
+        #     raise ValueError("Must have at least one modality")
 
         answer: dict = self.answers[f"a{idx + 1}"]
         question_id: int = answer["question id"]
@@ -59,6 +60,9 @@ class LANoireDataset(Dataset):
         filename: str = answer["name"].removesuffix(".mp3")
 
         subject_name: str = self.subjects[subject_name]["name"]
+
+        if self.modalities is None:
+            return {"answer": answer, "question": question, "subject": subject_name, "case": case, "label": label}
 
         data = []
 

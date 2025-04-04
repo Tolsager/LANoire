@@ -60,7 +60,7 @@ class CLAPModel(L.LightningModule):
     
     def on_test_epoch_end(self):
         embeddings = torch.cat(self.test_step_outputs, dim=0)
-        save_pickle("CLAP_embeddings.pkl", embeddings)
+        save_pickle("data/processed/CLAP_embeddings.pkl", embeddings)
 
 
 
