@@ -20,7 +20,7 @@ class Modality(IntEnum):
 
 
 class LANoireDataset(Dataset):
-    def __init__(self, json_path: str = "data/data.json", modalities: tuple[Modality] = (Modality.AUDIO,)):
+    def __init__(self, json_path: str = "data/raw/data.json", modalities: tuple[Modality] = (Modality.AUDIO,)):
         with open(json_path, "r") as f:
             data_json = json.load(f)
 
@@ -55,7 +55,7 @@ class LANoireDataset(Dataset):
         case: str = self.id_to_case[case_id]  # e.g. "16_the_naked_city"
         label: int = self.class_map[answer["class"]]
 
-        directory: Path = Path(f"shortened_dataset/{case}/{subject_name}")
+        directory: Path = Path(f"data/raw/{case}/{subject_name}")
         filename: str = answer["name"].removesuffix(".mp3")
 
         subject_name: str = self.subjects[subject_name]["name"]
