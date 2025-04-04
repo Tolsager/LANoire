@@ -1,49 +1,74 @@
-import sys
-sys.path.append("")
-from LANoire.dataset import LANoireDataset, Modality
 from utils import save_pickle
 
 from transformers import DistilBertModel, AutoTokenizer
-import torch.nn as nn
 import torch
+import torch.nn.functional as F
+import torch.nn as nn
 import lightning as L
 
-
 class TextEncoder(L.LightningModule):
-    def __init__(self, model_name: str = "distilbert-base-uncased", hidden_size: int = 768):
+    def __init__(self, model_name: str = "distilbert-base-uncased"):
         super().__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = DistilBertModel.from_pretrained(model_name)
-        # self.fc = nn.Linear(hidden_size, 2)
         self.embedding_outputs = []
 
+    def forward(self, model_input: dict):
+        output = self.model(**model_input)
+        return output.last_hidden_state
 
-    def forward(self, batch: tuple[dict|int]):
+    def test_step(self, batch: tuple):
         text, label = batch
         question = text["q"]
         answer = text["a"]
-        texts = f"question: {question} answer: {answer}"
+        texts = [f"question: {q} answer: {a}" for q, a in zip(question, answer)]
+        model_input = self.tokenizer(
+            texts, padding=True, truncation=True, return_tensors="pt"
+        )
 
-        input_ids = self.tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
+        embeddings = self(model_input)
 
-        output = self.model(**input_ids)
+        self.embedding_outputs.append(embeddings[:, 0, :])
 
-        return output.last_hidden_state, label
+    def on_test_epoch_end(self):
+        embeddings = torch.cat(self.embedding_outputs, dim=0)
+        save_pickle("distilbert_embeds.pkl", embeddings)
+
+
+class TextMLP(L.LightningModule):
+    def __init__(self, embeds: torch.tensor, hidden_size: int = 768):
+        super().__init__()
+
+        self.embeds = nn.Embedding.from_pretrained(embeddings=embeds)
+
+        self.mlp = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size),
+            nn.GELU(),
+            nn.Linear(hidden_size, 2)
+        )
+
+    def forward(self, idx: torch.tensor):
+        embeds = self.embeds(idx)
+        logits = self.mlp(embeds)
+        return logits
     
-    def test_step(self, batch: dict):
-        embedding, label = self(batch)
-        self.embedding_outputs.append((embedding[:, 0, :], label))
+    def training_step(self, batch, batch_idx: int):
+        inputs, target = batch
+        output = self(inputs)
+        loss = F.cross_entropy(output, target)
+        return loss
 
-    def on_test_epoch_end(self, batch: dict):
-        embeddings = torch.cat([x[0] for x in self.embedding_outputs], dim=0)
-        labels = [x[1] for x in self.embedding_outputs]
-        save_pickle("distilbert-embeds.pkl", (embeddings, labels))
+    def validation_step(self, batch, batch_idx: int):
+        inputs, targets = batch
+        output = self(inputs)
+        loss = F.cross_entropy(output, targets)
+        self.log("validation_loss", loss)
 
+    def test_step(self, batch, batch_idx: int):
+        inputs, targets = batch
+        output = self(inputs)
+        loss = F.cross_entropy(output, targets)
+        self.log("test loss", loss)
 
-if __name__ == '__main__':
-    ds = LANoireDataset(modalities=(Modality.TEXT,))
-
-    text_encoder = TextEncoder()
-
-    for text, label in ds:
-        text_encoder((text, label))
+    def configure_optimizers(self):
+        return torch.optim.AdamW(self.mlp.parameters(), lr=0.005)
