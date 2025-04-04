@@ -114,13 +114,32 @@ def get_data_split_ids() -> tuple[list[int], list[int], list[int]]:
 
     return train_ids, val_ids, test_ids
     
-if __name__ == '__main__':
-    # dataset = LANoireDataset(modalities=(Modality.TEXT, Modality.AUDIO,))
-    dataset = LANoireDataset(modalities=(Modality.AUDIO,))
+
+class LANoireIndexDataset(Dataset):
+    """
+    Used to get indecies to look 
+    """
+    def __init__(self, json_path: str = "data/raw/data.json"):
+        with open(json_path, "r") as f:
+            data_json = json.load(f)
+        
+        self.answers = data_json["answers"][0]
+        self.class_map = {"lie": 0, "truth": 1}
+
+    def __len__(self):
+        return len(self.answers)
     
-    #indices = [131, 132, 133, 134, 135, 136, 456, 457, 458, 459, 460, 461, 462]
+    def __getitem__(self, idx):
+        answer = self.answers[f"a{idx+1}"]
+        id = torch.tensor(answer["id"] - 1)
+        label = self.class_map[answer["class"]]
+        return id, label
+
+
+if __name__ == '__main__':
+    dataset = LANoireDataset(modalities=(Modality.AUDIO,))
 
     import tqdm
 
     for i in tqdm.tqdm(range(len(dataset))):
-        text, audio, label = dataset.__getitem__(i, debug=True)
+        audio, label = dataset.__getitem__(i, debug=True)

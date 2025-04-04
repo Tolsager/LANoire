@@ -2,6 +2,7 @@ from utils import save_pickle
 
 from transformers import DistilBertModel, AutoTokenizer
 import torch
+import torch.nn.functional as F
 import torch.nn as nn
 import lightning as L
 
@@ -50,5 +51,24 @@ class TextMLP(L.LightningModule):
         embeds = self.embeds(idx)
         logits = self.mlp(embeds)
         return logits
+    
+    def training_step(self, batch, batch_idx: int):
+        inputs, target = batch
+        output = self(inputs)
+        loss = F.cross_entropy(output, target)
+        return loss
 
+    def validation_step(self, batch, batch_idx: int):
+        inputs, targets = batch
+        output = self(inputs)
+        loss = F.cross_entropy(output, targets)
+        self.log("validation_loss", loss)
 
+    def test_step(self, batch, batch_idx: int):
+        inputs, targets = batch
+        output = self(inputs)
+        loss = F.cross_entropy(output, targets)
+        self.log("test loss", loss)
+
+    def configure_optimizers(self):
+        return torch.optim.AdamW(self.mlp.parameters(), lr=0.005)
