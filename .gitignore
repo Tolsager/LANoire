@@ -1,5 +1,7 @@
 data/
 shortened_dataset/
+lightning_logs/
+.vscode/
 
 
 # Byte-compiled / optimized / DLL files

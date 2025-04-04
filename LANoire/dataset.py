@@ -1,4 +1,5 @@
 from enum import IntEnum
+from sklearn.model_selection import train_test_split
 import json
 import glob
 import numpy as np
@@ -88,6 +89,23 @@ class LANoireDataset(Dataset):
 
         data.append(label)
         return tuple(data)
+
+def get_data_split_ids() -> tuple[list[int], list[int], list[int]]: 
+    with open("data/raw/data.json", "r") as f:
+        data_json = json.load(f)
+    
+    answers = data_json["answers"][0]
+    ids = []
+    labels = []
+    class_map = {"lie": 0, "truth": 1}
+    for d in answers.values():
+        ids.append(d["id"])
+        labels.append(class_map[d["class"]])
+
+    train_ids, test_ids, _, test_labels = train_test_split(ids, labels, test_size=0.2, stratify=labels, random_state=42)
+    val_ids, test_ids = train_test_split(test_ids, test_size=0.5, stratify=test_labels, random_state=42)
+
+    return train_ids, val_ids, test_ids
     
 if __name__ == '__main__':
     # dataset = LANoireDataset(modalities=(Modality.TEXT, Modality.AUDIO,))
