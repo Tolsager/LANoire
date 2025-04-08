@@ -3,6 +3,7 @@ shortened_dataset/
 lightning_logs/
 .vscode/
 wandb/
+models/
 
 
 # Byte-compiled / optimized / DLL files
