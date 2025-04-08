@@ -1,5 +1,7 @@
 from LANoire import dataset, text_encoder, utils
 from torch.utils.data import Subset, DataLoader
+import torch
+from train_unimodal import get_model_arch
 import lightning as L
 
 if __name__ == '__main__':
@@ -9,14 +11,16 @@ if __name__ == '__main__':
     train_set = Subset(ds, indices=train_ids)
     validation_set = Subset(ds, indices=validation_ids)
     test_set = Subset(ds, indices=test_ids)
-    train_dataloader = DataLoader(train_set, batch_size=32, shuffle=True, num_workers=3, persistent_workers=True)
-    validation_dataloader = DataLoader(validation_set, batch_size=32, shuffle=False, num_workers=3, persistent_workers=True)
-    test_dataloader = DataLoader(test_set, batch_size=32, shuffle=False, num_workers=3)
+    train_dataloader = DataLoader(train_set, batch_size=48, shuffle=True, num_workers=3, persistent_workers=True)
+    validation_dataloader = DataLoader(validation_set, batch_size=48, shuffle=False, num_workers=3, persistent_workers=True)
+    test_dataloader = DataLoader(test_set, batch_size=48, shuffle=False, num_workers=3)
 
     distilbert_embeddings = utils.load_pickle("distilbert_embeds.pkl")
-    model = text_encoder.TextMLP(embeds=distilbert_embeddings)
+    model = text_encoder.TextMLP(embeds=distilbert_embeddings, hidden_size=512)
 
-    wandb_logger = utils.setup_logger(tags=["unimodal", "text", "dropout", "hidden_size=512"])
+    model_arch = get_model_arch(model, (1,), dtypes=[torch.long])
 
-    trainer = L.Trainer(max_epochs=250, logger=wandb_logger if not debug else None)
+    wandb_logger = utils.setup_logger(tags=["unimodal", "text"], config={"lr": 1e-4, "batch_size": 48}, note=model_arch)
+
+    trainer = L.Trainer(max_epochs=150, logger=wandb_logger if not debug else None)
     trainer.fit(model=model, train_dataloaders=train_dataloader, val_dataloaders=validation_dataloader)

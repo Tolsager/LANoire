@@ -17,6 +17,6 @@ def save_pickle(filepath: str, obj: typing.Any):
         pickle.dump(obj, f)
 
 
-def setup_logger(project: str = "LANoire", entity: str = "pydqn", tags: list[str] = ["unimodal", "text"]):
-    logger = WandbLogger(project=project, entity=entity, tags=tags)
+def setup_logger(project: str = "LANoire", entity: str = "pydqn", tags: list[str] = ["unimodal", "text"], config: dict = {"lr": 0.0001, "batch_size": 100}, note: str = "Missing note"):
+    logger = WandbLogger(project=project, entity=entity, tags=tags, config=config, notes=note)
     return logger

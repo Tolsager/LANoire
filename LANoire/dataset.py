@@ -1,5 +1,6 @@
 from enum import IntEnum
 from sklearn.model_selection import train_test_split
+import cv2
 import json
 import glob
 import torch
@@ -95,8 +96,8 @@ class LANoireDataset(Dataset):
                     assert len(glob.glob(str(video_dir) + "*.png")) > 0, f"Missing video frames {video_dir}"
                     data.append(2)
                 else:
-                    video_frames = [torchvision.io.read_image(frame) for frame in glob.glob(str(directory / f"original/{filename}*.png"))]
-                    data.append(torch.tensor(video_frames))
+                    video_frames = [cv2.imread(frame) for frame in glob.glob(str(directory / f"original/{filename}*.png"))] # Loads the images as BGR
+                    data.append(video_frames)
 
         data.append(label)
         return tuple(data)
@@ -121,7 +122,7 @@ def get_data_split_ids() -> tuple[list[int], list[int], list[int]]:
 
 class LANoireIndexDataset(Dataset):
     """
-    Used to get indecies to look 
+    Used to get indecies to lookup embeddings and the corresponding label of the statement
     """
     def __init__(self, json_path: str = "data/raw/data.json"):
         with open(json_path, "r") as f:
@@ -141,7 +142,7 @@ class LANoireIndexDataset(Dataset):
 
 
 if __name__ == '__main__':
-    dataset = LANoireDataset(modalities=(Modality.AUDIO,))
+    dataset = LANoireDataset(modalities=(Modality.VIDEO,))
 
     import tqdm
 
