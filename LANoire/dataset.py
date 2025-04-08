@@ -136,7 +136,7 @@ class LANoireIndexDataset(Dataset):
     def __getitem__(self, idx):
         answer = self.answers[f"a{idx}"]
         id = torch.tensor(answer["id"] - 1)
-        label = self.class_map[answer["class"]]
+        label = torch.tensor(self.class_map[answer["class"]], dtype=torch.float32)
         return id, label
 
 

@@ -6,6 +6,8 @@ import torch.nn.functional as F
 import torch.nn as nn
 import lightning as L
 
+from torchmetrics.functional import accuracy
+
 class TextEncoder(L.LightningModule):
     def __init__(self, model_name: str = "distilbert-base-uncased"):
         super().__init__()
@@ -39,12 +41,16 @@ class TextMLP(L.LightningModule):
     def __init__(self, embeds: torch.tensor, hidden_size: int = 768):
         super().__init__()
 
+        self.criterion = nn.BCEWithLogitsLoss()
         self.embeds = nn.Embedding.from_pretrained(embeddings=embeds)
 
         self.mlp = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size),
+            nn.Linear(768, 512),
             nn.GELU(),
-            nn.Linear(hidden_size, 2)
+            nn.Dropout(p=0.3),
+            # nn.LayerNorm(hidden_size),
+            # nn.BatchNorm1d(hidden_size),
+            nn.Linear(512, 1)
         )
 
     def forward(self, idx: torch.tensor):
@@ -52,23 +58,28 @@ class TextMLP(L.LightningModule):
         logits = self.mlp(embeds)
         return logits
     
-    def training_step(self, batch, batch_idx: int):
-        inputs, target = batch
-        output = self(inputs)
-        loss = F.cross_entropy(output, target)
+    def training_step(self, batch):
+        inputs, targets = batch
+        output = self(inputs).squeeze(1)
+        loss = self.criterion(output, targets)
+        preds = F.sigmoid(output)
+        self.log("train_acc", accuracy(preds, targets, task="binary"), on_step=False, on_epoch=True)
+        self.log("train_loss", loss, on_step=False, on_epoch=True)
         return loss
 
-    def validation_step(self, batch, batch_idx: int):
+    def validation_step(self, batch):
         inputs, targets = batch
-        output = self(inputs)
-        loss = F.cross_entropy(output, targets)
-        self.log("validation_loss", loss)
+        output = self(inputs).squeeze(1)
+        loss = self.criterion(output, targets)
+        preds = F.sigmoid(output)
+        self.log("val_loss", loss)
+        self.log("val_acc", accuracy(preds, targets, task="binary"))
 
-    def test_step(self, batch, batch_idx: int):
+    def test_step(self, batch):
         inputs, targets = batch
-        output = self(inputs)
-        loss = F.cross_entropy(output, targets)
-        self.log("test loss", loss)
+        output = self(inputs).squeeze(1)
+        loss = self.criterion(output, targets)
+        self.log("test_loss", loss)
 
     def configure_optimizers(self):
-        return torch.optim.AdamW(self.mlp.parameters(), lr=0.005)
+        return torch.optim.AdamW(self.mlp.parameters(), lr=0.0001)
