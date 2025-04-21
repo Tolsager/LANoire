@@ -27,8 +27,8 @@ def get_model_arch(model: torch.nn.Module, input_size: tuple[int], dtypes:tuple[
 # max_epochs = 10
 
 enable_checkpointing = True
-max_epochs = 500
-batch_size = 50
+max_epochs = 50
+batch_size = 10
 lr = 1e-3
 dropout = 0.3
 checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint("models", monitor="val_acc", mode="max")

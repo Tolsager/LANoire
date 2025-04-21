@@ -1,4 +1,5 @@
 import lightning as L
+from LANoire.utils import save_pickle
 import wandb
 from LANoire.dataset import LANoireIndexDataset, get_data_split_ids
 import numpy.typing as npt
@@ -21,6 +22,7 @@ class WhisperMlp(L.LightningModule):
         self.val_acc = BinaryAccuracy()
         self.lr = lr
         self.dropout = torch.nn.Dropout(dropout)
+        self.val_wrong = []
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.embeddings(x)
@@ -49,10 +51,18 @@ class WhisperMlp(L.LightningModule):
         loss = self.criterion(pred, y)
         self.log('val_acc', self.val_acc)
         self.log('val_loss', loss)
+        
+        if self.trainer.current_epoch == self.trainer.max_epochs - 1:
+            pred = self.sigmoid(pred) > 0.5
+            self.val_wrong.extend(x[pred!=y].tolist())
     
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)
     
+    def on_validation_epoch_end(self):
+        if self.trainer.current_epoch == self.trainer.max_epochs - 1:
+            save_pickle("data/processed/whisper_errors.pkl", self.val_wrong)
+        
     
 class ClapMlp(L.LightningModule):
     def __init__(self, lr: float = 1e-3, dropout: float = 0.1):
@@ -117,7 +127,7 @@ class ClapDm(L.LightningDataModule):
         self.test_ds = torch.utils.data.Subset(ds, self.test_indices)
     
     def train_dataloader(self) -> torch.utils.data.DataLoader:
-        return torch.utils.data.DataLoader(self.train_ds, batch_size=self.train_batch_size, **self.kwargs)
+        return torch.utils.data.DataLoader(self.train_ds, batch_size=self.train_batch_size, shuffle=True, **self.kwargs)
 
     def val_dataloader(self) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(self.val_ds, batch_size=self.eval_batch_size, **self.kwargs)
