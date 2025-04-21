@@ -31,7 +31,6 @@ class CAF(nn.Module):
         self.attention_dim = attention_dim
         self.SA = CA_SA(dim=attention_dim)
         self.CAs = [CA_SA(dim=attention_dim) for _ in range(n_features)]
-
         self.n_features = n_features
     
     def forward(self, *features):

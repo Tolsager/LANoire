@@ -1,4 +1,4 @@
-from LANoire.unimodal_model import ClapDm, ClapMlp
+from LANoire.unimodal_model import ClapDm, ClapMlp, WhisperMlp
 import os 
 import torch
 import lightning as L
@@ -24,19 +24,21 @@ def get_model_arch(model: torch.nn.Module, input_size: tuple[int], dtypes:tuple[
     return repr(s)
     
 # debug
-os.environ["WANDB_MODE"] = "offline"
+# os.environ["WANDB_MODE"] = "offline"
 # enable_checkpointing = False
-max_epochs = 10
+# max_epochs = 10
 
 enable_checkpointing = True
-# max_epochs = 500
+max_epochs = 500
 batch_size = 50
 lr = 1e-3
 dropout = 0.3
 checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint("models", monitor="val_acc", mode="max")
 dm = ClapDm(train_batch_size=batch_size)
-tags = ["CLAP", "unimodal", "audio"]
-model = ClapMlp(lr=lr, dropout=dropout)
+# tags = ["CLAP", "unimodal", "audio"]
+tags = ["Whisper", "unimodal", "audio"]
+# model = ClapMlp(lr=lr, dropout=dropout)
+model = WhisperMlp(lr=lr, dropout=dropout)
 model_arch = get_model_arch(model, input_size=(1,), dtypes=[torch.long])
 wandb_logger = L.pytorch.loggers.WandbLogger(project="LANoire", entity="pydqn", notes=model_arch, config={"lr": lr, "batch_size": batch_size, "dropout": dropout})
 trainer = L.Trainer(max_epochs=max_epochs, logger=wandb_logger, callbacks=[checkpoint_callback])
