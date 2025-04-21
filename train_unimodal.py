@@ -5,8 +5,6 @@ import lightning as L
 from dotenv import load_dotenv
 import torchinfo
 
-load_dotenv()
-
 def get_model_arch(model: torch.nn.Module, input_size: tuple[int], dtypes:tuple[torch.dtype]) -> str:
     s = torchinfo.summary(
         model, input_size=input_size, dtypes=dtypes, verbose=0

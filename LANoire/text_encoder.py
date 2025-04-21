@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 import lightning as L
+import wandb
 
 from torchmetrics.functional import accuracy
 
@@ -42,15 +43,17 @@ class TextMLP(L.LightningModule):
         super().__init__()
 
         self.criterion = nn.BCEWithLogitsLoss()
+        self.embed_size = embeds.shape[-1]
         self.embeds = nn.Embedding.from_pretrained(embeddings=embeds)
 
         self.mlp = nn.Sequential(
-            nn.Linear(768, 512),
+            nn.Linear(self.embed_size, hidden_size),
             nn.GELU(),
-            nn.Dropout(p=0.3),
-            # nn.LayerNorm(hidden_size),
-            # nn.BatchNorm1d(hidden_size),
-            nn.Linear(512, 1)
+            nn.Dropout(p=0.25),
+            # nn.Linear(hidden_size, hidden_size),
+            # nn.GELU(),
+            # nn.Dropout(p=0.15),
+            nn.Linear(hidden_size, 1)
         )
 
     def forward(self, idx: torch.tensor):
@@ -68,6 +71,8 @@ class TextMLP(L.LightningModule):
         return loss
 
     def validation_step(self, batch):
+        if self.global_step == 0:
+            wandb.define_metric("val_acc", summary="max")
         inputs, targets = batch
         output = self(inputs).squeeze(1)
         loss = self.criterion(output, targets)
@@ -82,4 +87,4 @@ class TextMLP(L.LightningModule):
         self.log("test_loss", loss)
 
     def configure_optimizers(self):
-        return torch.optim.AdamW(self.mlp.parameters(), lr=0.0001)
+        return torch.optim.AdamW(self.mlp.parameters(), lr=1e-4)
