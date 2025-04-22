@@ -66,7 +66,7 @@ class VideoEncoder(L.LightningModule):
         super().__init__()
         self.model = TimesformerModel.from_pretrained("facebook/timesformer-base-finetuned-k400")
         self.model.train()
-        self.results = {}
+        self.results = []
 
     def forward(self, model_input: list[np.ndarray]):
         """
@@ -79,10 +79,9 @@ class VideoEncoder(L.LightningModule):
         idx, frames = batch
 
         result = self(frames)
-        self.results[idx] = result.mean(dim=1)
+        self.results.append(result.mean(dim=1))
         
-
-    
     def on_test_epoch_end(self):
-        utils.save_pickle("video_embeddings.pkl", self.results)
+        embeddings = torch.cat(self.results, dim=0).cpu
+        utils.save_pickle("video_embeddings.pkl", embeddings)
 
