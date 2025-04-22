@@ -148,7 +148,8 @@ class LANoireVideoDataset(Dataset):
         self.image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
         self.bounding_boxes = utils.load_pickle(bounding_boxes_path)
         self.answers = data_json["answers"][0]
-        self.num_frames = 8
+        self.class_map = {"lie": 0, "truth": 1}
+        self.num_frames = num_frames
 
     def __len__(self):
         return len(self.answers)
@@ -160,14 +161,17 @@ class LANoireVideoDataset(Dataset):
             frames.append(np.zeros((224, 224, 3)))
         frames = frames[:self.num_frames]
         
-        if len(frames) < 8:
+        if len(frames) < self.num_frames:
             last_frame = frames[-1]
             for i in range(self.num_frames - len(frames)):
                 frames.append(last_frame)
 
         pixel_values = self.image_processor(frames, return_tensors="pt").pixel_values[0]
 
-        return idx, pixel_values
+        answer = self.answers[f"a{idx+1}"]
+        label = torch.tensor(self.class_map[answer["class"]], dtype=torch.float32)
+
+        return pixel_values, label
 
 
 if __name__ == '__main__':

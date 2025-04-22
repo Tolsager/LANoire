@@ -2,7 +2,7 @@ import mediapipe as mp
 import numpy as np
 from typing import List
 
-from transformers import TimesformerModel
+from transformers import TimesformerModel, VideoMAEForVideoClassification
 import lightning as L
 import torch
 import torch.nn as nn
@@ -152,3 +152,53 @@ class VideoMLP(L.LightningModule):
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.mlp.parameters(), lr=5e-4)
+
+
+class VideoMAEModel(L.LightningModule):
+    def __init__(self):
+        super().__init__()
+        self.model = VideoMAEForVideoClassification.from_pretrained("MCG-NJU/videomae-base")
+        self.criterion = nn.BCEWithLogitsLoss()
+
+        hidden_size = self.model.config.hidden_size
+
+        self.model.classifier = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, 1)
+        )
+
+    def forward(self, x):
+        return self.model(x)
+
+
+    def training_step(self, batch):
+        output, target = self._shared_step(batch)
+        loss = self.criterion(output, target)
+        pred = F.sigmoid(output)
+        self.log("train_acc", accuracy(pred, target, task="binary"), on_step=False, on_epoch=True)
+        self.log("train_loss", loss, on_step=False, on_epoch=True)
+        return loss
+    
+    def validation_step(self, batch):
+        if self.global_step == 0:
+            wandb.define_metric("val_acc", summary="max")
+        output, target = self._shared_step(batch)
+        loss = self.criterion(output, target)
+        pred = F.sigmoid(output)
+        self.log("val_loss", loss)
+        self.log("val_acc", accuracy(pred, target, task="binary"))
+    
+    def test_step(self, batch):
+        output, targets = self._shared_step(batch)
+        loss = self.criterion(output, targets)
+        self.log("test_loss", loss)
+
+
+    def _shared_step(self, batch):
+        frames, target = batch
+        output = self(frames).squeeze(1)
+        return output, target
+    
+    def configure_optimizers(self):
+        return torch.optim.AdamW(self.parameters(), lr=5e-4)
