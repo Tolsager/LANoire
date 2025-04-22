@@ -157,8 +157,12 @@ class LANoireVideoDataset(Dataset):
         frames = list(filter(lambda x: x is not None, frames))
 
         frames = frames[:self.num_frames]
+        
+        frames = list(filter(lambda x: len(x.shape) == 3, frames))
+
         if len(frames) < 8:
-            frames.extend(frames[-1]*(self.num_frames - len(frames)))
+            for i in range(self.num_frames - len(frames)):
+                frames.append(frames[-1])
 
         pixel_values = self.image_processor(frames, return_tensors="pt")
 
