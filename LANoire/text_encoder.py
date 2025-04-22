@@ -44,8 +44,8 @@ class TextMLP(L.LightningModule):
         super().__init__()
 
         self.criterion = nn.BCEWithLogitsLoss()
-        self.embed_size = embeds.shape[-1]
         self.embeds = nn.Embedding.from_pretrained(embeddings=embeds)
+        self.embed_size = self.embeds.embedding_dim
 
         self.mlp = nn.Sequential(
             nn.Linear(self.embed_size, hidden_size),
