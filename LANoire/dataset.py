@@ -96,7 +96,7 @@ class LANoireDataset(Dataset):
                     assert len(glob.glob(str(video_dir) + "*.png")) > 0, f"Missing video frames {video_dir}"
                     data.append(2)
                 else:
-                    video_frames = [cv2.imread(frame) for frame in glob.glob(str(directory / f"original/{filename}*.png"))] # Loads the images as BGR
+                    video_frames = [cv2.cvtColor(cv2.imread(frame), cv2.COLOR_BGR2RGB) for frame in glob.glob(str(directory / f"original/{filename}*.png"))] # Loads the images as BGR
                     data.append(video_frames)
 
         data.append(label)
@@ -111,7 +111,7 @@ def get_data_split_ids() -> tuple[list[int], list[int], list[int]]:
     labels = []
     class_map = {"lie": 0, "truth": 1}
     for d in answers.values():
-        ids.append(d["id"])
+        ids.append(d["id"] - 1)
         labels.append(class_map[d["class"]])
 
     train_ids, test_ids, _, test_labels = train_test_split(ids, labels, test_size=0.2, stratify=labels, random_state=42)
@@ -135,7 +135,7 @@ class LANoireIndexDataset(Dataset):
         return len(self.answers)
     
     def __getitem__(self, idx):
-        answer = self.answers[f"a{idx}"]
+        answer = self.answers[f"a{idx + 1}"]
         id = torch.tensor(answer["id"] - 1)
         label = torch.tensor(self.class_map[answer["class"]], dtype=torch.float32)
         return id, label

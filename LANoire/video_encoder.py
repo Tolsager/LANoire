@@ -1,14 +1,14 @@
-import sys
-sys.path.append("")
-from LANoire import dataset, utils
-
-import torch
-import torch.nn as nn
-from torchvision import models
 import mediapipe as mp
 import cv2
 import numpy as np
 from typing import List
+
+from transformers import TimesformerModel, AutoImageProcessor
+import lightning as L
+import torch
+
+from LANoire import dataset
+from LANoire import utils
 
 mp_face_detection = mp.solutions.face_detection
 face_detector = mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5)
@@ -31,58 +31,61 @@ def extract_face_mediapipe(frame):
     return None
 
 
-class FeatureExtractor(nn.Module): # MobileNetV2
-    def __init__(self):
-        super().__init__()
-        base_model = models.mobilenet_v2(weights="MobileNet_V2_Weights.DEFAULT")
-        self.features = base_model.features
-        self.pool = nn.AdaptiveAvgPool2d((1, 1))
-
-    def forward(self, x):
-        x = self.features(x)
-        x = self.pool(x)
-        return x.view(x.size(0), -1)
-
-
-class ClassifierHead(nn.Module):
-    def __init__(self, feature_dim=1280, hidden_dim=256, num_layers=1, num_classes=2):
-        super().__init__()
-        self.lstm = nn.LSTM(input_size=feature_dim,
-                            hidden_size=hidden_dim,
-                            num_layers=num_layers,
-                            batch_first=True,
-                            bidirectional=True)
-        self.classifier = nn.Sequential(
-            nn.Linear(hidden_dim * 2, 128),
-            nn.ReLU(),
-            nn.Linear(128, num_classes)
-        )
-
-    def forward(self, x):
-        _, (h_n, _) = self.lstm(x)
-        h_n = torch.cat([h_n[0], h_n[1]], dim=1)
-        return self.classifier(h_n)
-
-
 def get_bounding_boxes(frames: List[np.ndarray]):
     bboxes = []
     for frame in frames:
-        bbox_coordinates = extract_face_mediapipe(frame)
-        bboxes.append(bbox_coordinates)
+        result = extract_face_mediapipe(frame)
+        if result is not None:
+            x1, y1, x2, y2 = result
+            result = frame[y1:y2, x1:x2]
+        bboxes.append(result)
 
     return bboxes
 
+class VideoDM(L.LightningDataModule):
+    def __init__(self, bounding_boxes: np.ndarray, batch_size: int = 8):
+        self.train_batch_size = batch_size
+        self.eval_batch_size = int(1.5 * batch_size)
+        self.bounding_boxes = bounding_boxes
 
-if __name__ == "__main__":
-    from tqdm import tqdm
-    dataset = dataset.LANoireDataset(modalities=(dataset.Modality.VIDEO,))
+    def setup(self) -> None:
+        self.train_indices, self.val_indices, self.test_indices = dataset.get_data_split_ids()
 
-    all_bboxes = {}
-
-    for i in tqdm(range(len(dataset))):
-        frames, _ = dataset[i]
-        video_bboxes = get_bounding_boxes(frames)
-        all_bboxes[i] = video_bboxes
     
-    utils.save_pickle("bounding_boxes.pkl", all_bboxes)
+    def train_dataloader(self) -> torch.utils.data.DataLoader:
+        return torch.utils.data.DataLoader(self.train_ds, batch_size=self.train_batch_size, **self.kwargs)
+
+    def val_dataloader(self) -> torch.utils.data.DataLoader:
+        return torch.utils.data.DataLoader(self.val_ds, batch_size=self.eval_batch_size, **self.kwargs)
+    
+    def test_dataloader(self) -> torch.utils.data.DataLoader:
+        return torch.utils.data.DataLoader(self.test_ds, batch_size=self.eval_batch_size, **self.kwargs)
+
+
+class VideoEncoder(L.LightningModule):
+    def __init__(self, bounding_boxes):
+        super().__init__()
+        self.bounding_boxes = bounding_boxes
+        self.image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
+        self.model = TimesformerModel.from_pretrained("facebook/timesformer-base-finetuned-k400")
+        self.results = {}
+    
+
+    def forward(self, video_frames: list[np.ndarray]):
+        """
+        video_frames: list of numpy arrays (num_frames, height, width, channels)
+        """
+        pixel_values = self.image_processor(video_frames, return_tensors="pt")
+        output = self.model(**pixel_values).last_hidden_state
+        return output
+    
+    def test_step(self, batch: tuple):
+        idx, label = batch
+
+        frames = self.bounding_boxes[idx]
+        
+
+    
+    def on_test_epoch_end(self):
+        utils.save_pickle("video_embeddings.pkl", self.results)
 
