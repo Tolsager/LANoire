@@ -65,20 +65,21 @@ class VideoEncoder(L.LightningModule):
     def __init__(self):
         super().__init__()
         self.model = TimesformerModel.from_pretrained("facebook/timesformer-base-finetuned-k400")
+        self.model.train()
         self.results = {}
 
     def forward(self, model_input: list[np.ndarray]):
         """
         video_frames: list of numpy arrays (num_frames, height, width, channels)
         """
-        output = self.model(**model_input).last_hidden_state
+        output = self.model(model_input).last_hidden_state
         return output
     
     def test_step(self, batch: tuple):
         idx, frames = batch
 
         result = self(frames)
-        self.results[idx] = result[:, 0, :] # CLS Token
+        self.results[idx] = result.mean(dim=1)
         
 
     

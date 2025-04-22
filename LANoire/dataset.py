@@ -4,6 +4,7 @@ import cv2
 import json
 import glob
 import torch
+import numpy as np
 import torchaudio
 import torchvision
 from pathlib import Path
@@ -155,16 +156,16 @@ class LANoireVideoDataset(Dataset):
     def __getitem__(self, idx):
         frames = self.bounding_boxes[idx]
         frames = list(filter(lambda x: x is not None, frames))
-
+        if len(frames) == 0:
+            frames.append(np.zeros((224, 224, 3)))
         frames = frames[:self.num_frames]
         
-        frames = list(filter(lambda x: len(x.shape) == 3, frames))
-
         if len(frames) < 8:
+            last_frame = frames[-1]
             for i in range(self.num_frames - len(frames)):
-                frames.append(frames[-1])
+                frames.append(last_frame)
 
-        pixel_values = self.image_processor(frames, return_tensors="pt")
+        pixel_values = self.image_processor(frames, return_tensors="pt").pixel_values[0]
 
         return idx, pixel_values
 
