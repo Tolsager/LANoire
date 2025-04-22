@@ -1,8 +1,7 @@
-import numpy.typing as npt
 import torchaudio
 import transformers
 import typing
-from LANoire.dataset import LANoireDataset, LANoireIndexDataset
+from LANoire.dataset import LANoireDataset
 from LANoire.utils import save_pickle
 from transformers import AutoFeatureExtractor, AutoModel, AutoProcessor
 

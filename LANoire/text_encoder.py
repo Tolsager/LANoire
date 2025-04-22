@@ -1,6 +1,6 @@
 from utils import save_pickle
 
-from transformers import DistilBertModel, AutoTokenizer
+from transformers import AutoModel, AutoTokenizer
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
@@ -10,11 +10,12 @@ import wandb
 from torchmetrics.functional import accuracy
 
 class TextEncoder(L.LightningModule):
-    def __init__(self, model_name: str = "distilbert-base-uncased"):
+    def __init__(self, model_name: str = "distilbert-base-uncased", embed_name: str = "distilbert_embeds.pkl"):
         super().__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = DistilBertModel.from_pretrained(model_name)
+        self.model = AutoModel.from_pretrained(model_name)
         self.embedding_outputs = []
+        self.embed_name = embed_name
 
     def forward(self, model_input: dict):
         output = self.model(**model_input)
@@ -35,7 +36,7 @@ class TextEncoder(L.LightningModule):
 
     def on_test_epoch_end(self):
         embeddings = torch.cat(self.embedding_outputs, dim=0)
-        save_pickle("data/processed/distilbert_embeds.pkl", embeddings)
+        save_pickle(f"data/processed/{self.embed_name}", embeddings)
 
 
 class TextMLP(L.LightningModule):
