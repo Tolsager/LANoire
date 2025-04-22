@@ -8,8 +8,9 @@ import torchaudio
 import torchvision
 from pathlib import Path
 
+from transformers import AutoImageProcessor
 from torch.utils.data import Dataset
-
+from LANoire import utils
 
 class Modality(IntEnum):
     TEXT = 1
@@ -21,9 +22,10 @@ class Modality(IntEnum):
 
 
 class LANoireDataset(Dataset):
-    def __init__(self, json_path: str = "data/raw/data.json", modalities: tuple[Modality]|None = (Modality.AUDIO,)):
-        with open(json_path, "r") as f:
-            data_json = json.load(f)
+    def __init__(self, json_path: str = "data/raw/data.json", data_dir: str = "data/raw", modalities: tuple[Modality]|None = (Modality.AUDIO,)):
+        data_json = utils.load_json(json_path)
+
+        self.data_dir = data_dir
 
         if modalities is not None:
             self.modalities = set(modalities)  # Store as a set for quick lookups
@@ -57,7 +59,7 @@ class LANoireDataset(Dataset):
         case: str = self.id_to_case[case_id]  # e.g. "16_the_naked_city"
         label: int = self.class_map[answer["class"]]
 
-        directory: Path = Path(f"data/raw/{case}/{subject_name}")
+        directory: Path = Path(f"{self.data_dir}/{case}/{subject_name}")
         filename: str = answer["name"].removesuffix(".mp3")
 
         subject_name: str = self.subjects[subject_name]["name"]
@@ -96,15 +98,14 @@ class LANoireDataset(Dataset):
                     assert len(glob.glob(str(video_dir) + "*.png")) > 0, f"Missing video frames {video_dir}"
                     data.append(2)
                 else:
-                    video_frames = [cv2.imread(frame) for frame in glob.glob(str(directory / f"original/{filename}*.png"))] # Loads the images as BGR
+                    video_frames = [cv2.cvtColor(cv2.imread(frame), cv2.COLOR_BGR2RGB) for frame in glob.glob(str(directory / f"original/{filename}*.png"))] # Loads the images as BGR
                     data.append(video_frames)
 
         data.append(label)
         return tuple(data)
 
-def get_data_split_ids() -> tuple[list[int], list[int], list[int]]: 
-    with open("data/raw/data.json", "r") as f:
-        data_json = json.load(f)
+def get_data_split_ids(json_path: str = "data/raw/data.json") -> tuple[list[int], list[int], list[int]]: 
+    data_json = utils.load_json(json_path)
     
     answers = data_json["answers"][0]
     ids = []
@@ -125,8 +126,7 @@ class LANoireIndexDataset(Dataset):
     Used to get indecies to lookup embeddings and the corresponding label of the statement
     """
     def __init__(self, json_path: str = "data/raw/data.json"):
-        with open(json_path, "r") as f:
-            data_json = json.load(f)
+        data_json = utils.load_json(json_path)
         
         self.answers = data_json["answers"][0]
         self.class_map = {"lie": 0, "truth": 1}
@@ -139,6 +139,30 @@ class LANoireIndexDataset(Dataset):
         id = torch.tensor(answer["id"] - 1)
         label = torch.tensor(self.class_map[answer["class"]], dtype=torch.float32)
         return id, label
+
+
+class LANoireVideoDataset(Dataset):
+    def __init__(self, json_path: str = "data/raw/data.json", bounding_boxes_path: str = "bounding_boxes.pkl", num_frames: int = 8):
+        data_json = utils.load_json(json_path)
+        self.image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
+        self.bounding_boxes = utils.load_pickle(bounding_boxes_path)
+        self.answers = data_json["answers"][0]
+        self.num_frames = 8
+
+    def __len__(self):
+        return len(self.answers)
+    
+    def __getitem__(self, idx):
+        frames = self.bounding_boxes[idx]
+        frames = list(filter(lambda x: x is not None, frames))
+
+        frames = frames[:self.num_frames]
+        if len(frames) < 8:
+            frames.extend(frames[-1]*(self.num_frames - len(frames)))
+
+        pixel_values = self.image_processor(frames, return_tensors="pt")
+
+        return idx, pixel_values
 
 
 if __name__ == '__main__':

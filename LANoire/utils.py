@@ -1,3 +1,4 @@
+import json
 import pickle  # noqa: I001
 import typing
 import numpy as np
@@ -15,6 +16,12 @@ def load_pickle(filepath: str):
 def save_pickle(filepath: str, obj: typing.Any):
     with open(filepath, "wb") as f:
         pickle.dump(obj, f)
+
+
+def load_json(filepath: str):
+    with open(filepath, "r") as f:
+        data = json.load(f)
+    return data
 
 
 def setup_logger(project: str = "LANoire", entity: str = "pydqn", tags: list[str] = ["unimodal", "text"], config: dict = {"lr": 0.0001, "batch_size": 100}, note: str = "Missing note"):
