@@ -4,7 +4,7 @@ import transformers
 import typing
 from LANoire.dataset import LANoireDataset, LANoireIndexDataset
 from LANoire.utils import save_pickle
-from transformers import AutoFeatureExtractor, AutoModel
+from transformers import AutoFeatureExtractor, AutoModel, AutoProcessor
 
 import lightning as L
 import torch
@@ -27,6 +27,55 @@ class  WhisperAudioDS(torch.utils.data.Dataset):
             audio, sampling_rate=self.sr, return_tensors="pt"
         )
         return features.input_features[0]
+
+class  Wav2Vec2DS(torch.utils.data.Dataset):
+    def __init__(self):
+        self.processor = AutoProcessor.from_pretrained("facebook/wav2vec2-base-960h")
+        self.sr = 16_000
+        self.ds = LANoireDataset("data/raw/data.json")
+        self.resampler = torchaudio.transforms.Resample(orig_freq=44_100, new_freq=self.sr)
+        
+    def __len__(self):
+        return len(self.ds)
+
+    def __getitem__(self, idx: int) -> dict[str, typing.Any]:
+        audio = self.ds[idx][0]["answer"]
+        audio = self.resampler(audio)
+
+        features = self.processor(
+            audio, sampling_rate=self.sr, return_tensors="pt", padding="max_length", max_length=64_000, truncation=True
+        )
+        return features.input_values[0]
+
+class Wav2Vec2DataModule(L.LightningDataModule):
+    def __init__(
+        self, batch_size: int = 16
+    ):
+        super().__init__()
+        self.batch_size = batch_size
+
+    def test_dataloader(self):
+        ds = Wav2Vec2DS()
+        return torch.utils.data.DataLoader(
+            ds, batch_size=self.batch_size, shuffle=False
+        )
+
+class Wav2Vec2Model(L.LightningModule):
+    def __init__(self):
+        super().__init__()
+        self.test_step_outputs = []
+        self.model = AutoModel.from_pretrained("facebook/wav2vec2-base-960h")
+
+    def forward(self, input_features: torch.Tensor) -> torch.Tensor:
+        return self.model(input_features).last_hidden_state.mean(dim=1)
+    
+    def test_step(self, batch: dict):
+        embeds = self(batch)
+        self.test_step_outputs.append(embeds)
+    
+    def on_test_epoch_end(self):
+        embeddings = torch.cat(self.test_step_outputs, dim=0)
+        save_pickle("data/processed/wav2vec2_embeddings.pkl", embeddings)
 
 class WhisperDataModule(L.LightningDataModule):
     def __init__(
