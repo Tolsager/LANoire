@@ -6,11 +6,9 @@ import torch
 import lightning as L
 
 if __name__ == '__main__':
-    num_frames = 8
-    bounding_boxes = LANoire.utils.load_pickle("bounding_boxes.pkl")
-    video_encoder = LANoire.video_encoder.VideoEncoder(bounding_boxes=bounding_boxes)
+    video_encoder = LANoire.video_encoder.VideoEncoder()
 
-    ds = LANoire.dataset.LANoireIndexDataset()
+    ds = LANoire.dataset.LANoireVideoDataset(json_path="data/raw/data.json", bounding_boxes_path="bounding_boxes.pkl")
     dataloader = torch.utils.data.DataLoader(ds, batch_size=10, shuffle=False)
 
     trainer = L.Trainer()

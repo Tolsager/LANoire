@@ -15,8 +15,7 @@ face_detector = mp_face_detection.FaceDetection(model_selection=0, min_detection
 
 
 def extract_face_mediapipe(frame):
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = face_detector.process(frame_rgb)
+    results = face_detector.process(frame)
     if results.detections:
         detection = results.detections[0]
         bbox = detection.location_data.relative_bounding_box
@@ -63,13 +62,11 @@ class VideoDM(L.LightningDataModule):
 
 
 class VideoEncoder(L.LightningModule):
-    def __init__(self, bounding_boxes):
+    def __init__(self):
         super().__init__()
-        self.bounding_boxes = bounding_boxes
         self.image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
         self.model = TimesformerModel.from_pretrained("facebook/timesformer-base-finetuned-k400")
         self.results = {}
-    
 
     def forward(self, video_frames: list[np.ndarray]):
         """
@@ -80,9 +77,10 @@ class VideoEncoder(L.LightningModule):
         return output
     
     def test_step(self, batch: tuple):
-        idx, label = batch
+        idx, frames = batch
 
-        frames = self.bounding_boxes[idx]
+        result = self(frames)
+        self.results[idx] = result[:, 0, :] # CLS Token
         
 
     
