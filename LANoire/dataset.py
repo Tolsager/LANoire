@@ -8,6 +8,7 @@ import torchaudio
 import torchvision
 from pathlib import Path
 
+from transformers import AutoImageProcessor
 from torch.utils.data import Dataset
 from LANoire import utils
 
@@ -143,6 +144,7 @@ class LANoireIndexDataset(Dataset):
 class LANoireVideoDataset(Dataset):
     def __init__(self, json_path: str = "data/raw/data.json", bounding_boxes_path: str = "bounding_boxes.pkl", num_frames: int = 8):
         data_json = utils.load_json(json_path)
+        self.image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
         self.bounding_boxes = utils.load_pickle(bounding_boxes_path)
         self.answers = data_json["answers"][0]
         self.num_frames = 8
@@ -158,7 +160,9 @@ class LANoireVideoDataset(Dataset):
         if len(frames) < 8:
             frames.extend(frames[-1]*(self.num_frames - len(frames)))
 
-        return idx, frames
+        pixel_values = self.image_processor(frames, return_tensors="pt")
+
+        return idx, pixel_values
 
 
 if __name__ == '__main__':

@@ -64,16 +64,14 @@ class VideoDM(L.LightningDataModule):
 class VideoEncoder(L.LightningModule):
     def __init__(self):
         super().__init__()
-        self.image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
         self.model = TimesformerModel.from_pretrained("facebook/timesformer-base-finetuned-k400")
         self.results = {}
 
-    def forward(self, video_frames: list[np.ndarray]):
+    def forward(self, model_input: list[np.ndarray]):
         """
         video_frames: list of numpy arrays (num_frames, height, width, channels)
         """
-        pixel_values = self.image_processor(video_frames, return_tensors="pt")
-        output = self.model(**pixel_values).last_hidden_state
+        output = self.model(**model_input).last_hidden_state
         return output
     
     def test_step(self, batch: tuple):
