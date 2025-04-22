@@ -4,14 +4,60 @@ import transformers
 import typing
 from LANoire.dataset import LANoireDataset, LANoireIndexDataset
 from LANoire.utils import save_pickle
+from transformers import AutoFeatureExtractor, AutoModel
 
 import lightning as L
 import torch
 
-def get_whisper_embeddings(audio: npt.NDArray, sampling_rate: int):
-    model = transformers.WhisperFeautureExtractor().from_pretrained("openai/whisper-tiny.en")
-    return model(audio, sampling_rate=sampling_rate)
+class  WhisperAudioDS(torch.utils.data.Dataset):
+    def __init__(self):
+        self.processor = AutoFeatureExtractor.from_pretrained("openai/whisper-tiny")
+        self.sr = 16_000
+        self.ds = LANoireDataset("data/raw/data.json")
+        self.resampler = torchaudio.transforms.Resample(orig_freq=44_100, new_freq=self.sr)
+        
+    def __len__(self):
+        return len(self.ds)
 
+    def __getitem__(self, idx: int) -> dict[str, typing.Any]:
+        audio = self.ds[idx][0]["answer"]
+        audio = self.resampler(audio)
+
+        features = self.processor(
+            audio, sampling_rate=self.sr, return_tensors="pt"
+        )
+        return features.input_features[0]
+
+class WhisperDataModule(L.LightningDataModule):
+    def __init__(
+        self, batch_size: int = 16, num_workers: int = 7
+    ):
+        super().__init__()
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+
+    def test_dataloader(self):
+        ds = WhisperAudioDS()
+        return torch.utils.data.DataLoader(
+            ds, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers
+        )
+        
+class WhisperModel(L.LightningModule):
+    def __init__(self):
+        super().__init__()
+        self.test_step_outputs = []
+        self.model = AutoModel.from_pretrained("openai/whisper-tiny")
+
+    def forward(self, input_features: torch.Tensor) -> torch.Tensor:
+        return self.model.encoder(input_features).last_hidden_state.mean(dim=1)
+    
+    def test_step(self, batch: dict):
+        embeds = self(batch)
+        self.test_step_outputs.append(embeds)
+    
+    def on_test_epoch_end(self):
+        embeddings = torch.cat(self.test_step_outputs, dim=0)
+        save_pickle("data/processed/Whisper_embeddings.pkl", embeddings)
 
 class CLAPAudioDS(torch.utils.data.Dataset):
     def __init__(self, model_name: str = "laion/clap-htsat-fused"):

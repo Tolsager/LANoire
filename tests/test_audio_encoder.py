@@ -1,6 +1,7 @@
-from LANoire.audio_encoder import get_whisper_embeddings
-import librosa
+from LANoire.audio_encoder import WhisperAudioDS
 
-def test_get_whisper_embeddings():
-    audio = librosa.ex("libri1")
-    
+
+def test_whisper_audio_ds():
+    ds = WhisperAudioDS()
+    s = ds[0]
+    assert s.shape == (1, 80, 3000)

@@ -111,7 +111,7 @@ def get_data_split_ids() -> tuple[list[int], list[int], list[int]]:
     labels = []
     class_map = {"lie": 0, "truth": 1}
     for d in answers.values():
-        ids.append(d["id"] - 1)
+        ids.append(d["id"]-1)
         labels.append(class_map[d["class"]])
 
     train_ids, test_ids, _, test_labels = train_test_split(ids, labels, test_size=0.2, stratify=labels, random_state=42)
@@ -135,13 +135,14 @@ class LANoireIndexDataset(Dataset):
         return len(self.answers)
     
     def __getitem__(self, idx):
-        answer = self.answers[f"a{idx + 1}"]
+        answer = self.answers[f"a{idx+1}"]
         id = torch.tensor(answer["id"] - 1)
         label = torch.tensor(self.class_map[answer["class"]], dtype=torch.float32)
         return id, label
 
 
 if __name__ == '__main__':
+    ids = get_data_split_ids()
     dataset = LANoireDataset(modalities=(Modality.VIDEO,))
 
     import tqdm

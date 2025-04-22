@@ -35,7 +35,7 @@ class TextEncoder(L.LightningModule):
 
     def on_test_epoch_end(self):
         embeddings = torch.cat(self.embedding_outputs, dim=0)
-        save_pickle("distilbert_embeds.pkl", embeddings)
+        save_pickle("data/processed/distilbert_embeds.pkl", embeddings)
 
 
 class TextMLP(L.LightningModule):
