@@ -2,7 +2,7 @@ import mediapipe as mp
 import numpy as np
 from typing import List
 
-from transformers import TimesformerModel, VideoMAEForVideoClassification
+from transformers import AutoModel, AutoModelForVideoClassification
 import lightning as L
 import torch
 import torch.nn as nn
@@ -74,10 +74,10 @@ class VideoDM(L.LightningDataModule):
 
 
 class VideoEncoder(L.LightningModule):
-    def __init__(self):
+    def __init__(self, model_name: str = "facebook/timesformer-base-finetuned-k400"):
         super().__init__()
-        self.model = TimesformerModel.from_pretrained(
-            "facebook/timesformer-base-finetuned-k400"
+        self.model = AutoModel.from_pretrained(
+            model_name
         )
         self.model.train()
         self.results = []
@@ -154,10 +154,11 @@ class VideoMLP(L.LightningModule):
         return torch.optim.AdamW(self.mlp.parameters(), lr=5e-4)
 
 
-class VideoMAEModel(L.LightningModule):
-    def __init__(self):
+class VideoModel(L.LightningModule):
+    def __init__(self, lr: float = 5e-4, model_name: str = "MCG-NJU/videomae-base"):
         super().__init__()
-        self.model = VideoMAEForVideoClassification.from_pretrained("MCG-NJU/videomae-base")
+        self.lr = lr
+        self.model = AutoModelForVideoClassification.from_pretrained(model_name)
         self.criterion = nn.BCEWithLogitsLoss()
 
         hidden_size = self.model.config.hidden_size
@@ -197,8 +198,9 @@ class VideoMAEModel(L.LightningModule):
 
     def _shared_step(self, batch):
         frames, target = batch
-        output = self(frames).squeeze(1)
+        output = self(frames).logits.squeeze(1)
         return output, target
     
     def configure_optimizers(self):
-        return torch.optim.AdamW(self.parameters(), lr=5e-4)
+        return torch.optim.AdamW(self.parameters(), lr=self.lr)
+
