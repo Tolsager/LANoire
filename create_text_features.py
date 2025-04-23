@@ -7,6 +7,8 @@ import lightning as L
 if __name__ == '__main__':
     dataset = LANoireDataset(modalities=(Modality.TEXT,))
     dataloader = DataLoader(dataset, batch_size=10, shuffle=False)
-    model = TextEncoder()
+    # model = TextEncoder("bert-base-uncased", "bert_base_uncased_embeds.pkl")
+    model = TextEncoder("roberta-base", "roberta_base_embeds.pkl")
+    # model = TextEncoder("distilbert-base-uncased", "distilbert_embeds.pkl")
     trainer = L.Trainer()
     trainer.test(model=model, dataloaders=dataloader)

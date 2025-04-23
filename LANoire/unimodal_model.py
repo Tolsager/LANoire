@@ -1,10 +1,9 @@
 import lightning as L
-from LANoire.utils import save_pickle
+from LANoire.utils import save_pickle, load_pickle
 import wandb
 from LANoire.dataset import LANoireIndexDataset, get_data_split_ids
 import numpy.typing as npt
 import numpy as np
-from utils import load_pickle
 import torch
 from torchmetrics.classification import BinaryAccuracy
 

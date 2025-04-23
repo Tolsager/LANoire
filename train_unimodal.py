@@ -3,26 +3,8 @@ import os
 import torch
 import lightning as L
 from dotenv import load_dotenv
-import torchinfo
 
-
-def get_model_arch(
-    model: torch.nn.Module, input_size: tuple[int], dtypes: tuple[torch.dtype]
-) -> str:
-    s = torchinfo.summary(model, input_size=input_size, dtypes=dtypes, verbose=0)
-
-    def repr(self):
-        divider = "=" * self.formatting.get_total_width()
-        all_layers = self.formatting.layers_to_str(self.summary_list, self.total_params)
-        summary_str = (
-            f"{divider}\n"
-            f"{self.formatting.header_row()}{divider}\n"
-            f"{all_layers}{divider}\n"
-        )
-        return summary_str
-
-    s.__repr__ = repr.__get__(s)
-    return repr(s)
+from utils import get_model_arch
 
 if __name__ == '__main__':
     # debug
@@ -30,6 +12,11 @@ if __name__ == '__main__':
     # enable_checkpointing = False
     # max_epochs = 10
 
+# debug
+# os.environ["WANDB_MODE"] = "offline"
+# enable_checkpointing = False
+# max_epochs = 10
+if __name__ == "__main__":
     enable_checkpointing = True
     max_epochs = 50
     batch_size = 50
@@ -57,7 +44,6 @@ if __name__ == '__main__':
         entity="pydqn",
         notes=model_arch,
         config={"lr": lr, "batch_size": batch_size, "dropout": dropout},
-        tags=tags
     )
     trainer = L.Trainer(
         max_epochs=max_epochs, logger=wandb_logger, callbacks=[checkpoint_callback]

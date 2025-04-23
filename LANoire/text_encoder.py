@@ -1,6 +1,6 @@
-from utils import save_pickle
+from LANoire.utils import save_pickle
 
-from transformers import DistilBertModel, AutoTokenizer
+from transformers import AutoModel, AutoTokenizer, RobertaForSequenceClassification
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
@@ -10,11 +10,12 @@ import wandb
 from torchmetrics.functional import accuracy
 
 class TextEncoder(L.LightningModule):
-    def __init__(self, model_name: str = "distilbert-base-uncased"):
+    def __init__(self, model_name: str = "distilbert-base-uncased", embed_name: str = "distilbert_embeds.pkl"):
         super().__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = DistilBertModel.from_pretrained(model_name)
+        self.model = AutoModel.from_pretrained(model_name)
         self.embedding_outputs = []
+        self.embed_name = embed_name
 
     def forward(self, model_input: dict):
         output = self.model(**model_input)
@@ -35,7 +36,7 @@ class TextEncoder(L.LightningModule):
 
     def on_test_epoch_end(self):
         embeddings = torch.cat(self.embedding_outputs, dim=0)
-        save_pickle("data/processed/distilbert_embeds.pkl", embeddings)
+        save_pickle(f"data/processed/{self.embed_name}", embeddings)
 
 
 class TextMLP(L.LightningModule):
@@ -88,3 +89,69 @@ class TextMLP(L.LightningModule):
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.mlp.parameters(), lr=1e-4)
+
+class TransEE(L.LightningModule):
+    def __init__(self, model_name: str = "roberta-base", lr=1e-4):
+        super().__init__()
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = RobertaForSequenceClassification.from_pretrained(model_name, num_labels=1)
+        self.lr = lr
+        self.criterion = torch.nn.BCEWithLogitsLoss()
+
+    def forward(self, model_input: dict):
+        output = self.model(**model_input)
+        return output.logits.squeeze(dim=1)
+    
+    def training_step(self, batch):
+        text, label = batch
+        label = label.float()
+        question = text["q"]
+        answer = text["a"]
+        texts = [f"question: {q} answer: {a}" for q, a in zip(question, answer)]
+        model_input = self.tokenizer(
+            texts, padding=True, truncation=True, return_tensors="pt"
+        )
+
+        out = self(model_input)
+        loss = self.criterion(out, label)
+        return loss
+
+    def validation_step(self, batch):
+        if self.global_step == 0:
+            wandb.define_metric("val_acc", summary="max")
+        text, label = batch
+        label = label.float()
+        question = text["q"]
+        answer = text["a"]
+        texts = [f"question: {q} answer: {a}" for q, a in zip(question, answer)]
+        model_input = self.tokenizer(
+            texts, padding=True, truncation=True, return_tensors="pt"
+        )
+
+        out = self(model_input)
+        preds = F.sigmoid(out)
+        loss = self.criterion(out, label)
+        self.log("val_loss", loss)
+        self.log("val_acc", accuracy(preds, label, task="binary"))
+
+    def test_step(self, batch: tuple):
+        text, label = batch
+        label = label.float()
+        question = text["q"]
+        answer = text["a"]
+        texts = [f"question: {q} answer: {a}" for q, a in zip(question, answer)]
+        model_input = self.tokenizer(
+            texts, padding=True, truncation=True, return_tensors="pt"
+        )
+
+        embeddings = self(model_input)
+
+        self.embedding_outputs.append(embeddings[:, 0, :])
+
+    def on_test_epoch_end(self):
+        embeddings = torch.cat(self.embedding_outputs, dim=0)
+        save_pickle(f"data/processed/{self.embed_name}", embeddings)
+    
+    def configure_optimizers(self):
+        return torch.optim.AdamW(self.model.parameters(), lr=self.lr)
+        
