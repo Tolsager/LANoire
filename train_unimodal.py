@@ -6,6 +6,11 @@ from dotenv import load_dotenv
 
 from utils import get_model_arch
 
+if __name__ == '__main__':
+    # debug
+    # os.environ["WANDB_MODE"] = "offline"
+    # enable_checkpointing = False
+    # max_epochs = 10
 
 # debug
 # os.environ["WANDB_MODE"] = "offline"
@@ -39,7 +44,6 @@ if __name__ == "__main__":
         entity="pydqn",
         notes=model_arch,
         config={"lr": lr, "batch_size": batch_size, "dropout": dropout},
-        tags=tags,
     )
     trainer = L.Trainer(
         max_epochs=max_epochs, logger=wandb_logger, callbacks=[checkpoint_callback]
