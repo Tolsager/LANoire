@@ -12,10 +12,10 @@ import lightning as L
 import torch
 
 class  WhisperAudioDS(torch.utils.data.Dataset):
-    def __init__(self):
+    def __init__(self, data_dir: str = "data/raw/data.json"):
         self.processor = AutoFeatureExtractor.from_pretrained("openai/whisper-tiny")
         self.sr = 16_000
-        self.ds = LANoireDataset("data/raw/data.json")
+        self.ds = LANoireDataset(data_dir)
         self.resampler = torchaudio.transforms.Resample(orig_freq=44_100, new_freq=self.sr)
         
     def __len__(self):
@@ -134,10 +134,10 @@ class CLAPAudioDS(torch.utils.data.Dataset):
         return features
 
 class ClapEeDs(torch.utils.data.Dataset):
-    def __init__(self, model_name: str = "laion/clap-htsat-fused"):
+    def __init__(self, model_name: str = "laion/clap-htsat-fused", json_path = "data/raw/data.json", data_dir = "data/raw"):
         self.processor = transformers.ClapFeatureExtractor.from_pretrained(model_name)
         self.CLAP_sr = 48000
-        self.ds = LANoireDataset("data/raw/data.json")
+        self.ds = LANoireDataset(json_path=json_path, data_dir=data_dir)
         self.resampler = torchaudio.transforms.Resample(orig_freq=44_100, new_freq=self.CLAP_sr)
 
     def __len__(self):
@@ -165,8 +165,8 @@ class ClapEeDm(L.LightningDataModule):
         self.kwargs = kwargs
 
     def setup(self, stage: str = None) -> None:
-        self.train_indices, self.val_indices, self.test_indices = get_data_split_ids()
-        ds = ClapEeDs()
+        self.train_indices, self.val_indices, self.test_indices = get_data_split_ids("/work3/s204135/data/raw/data.json")
+        ds = ClapEeDs(json_path="/work3/s204135/data/raw/data.json", data_dir="/work3/s204135/data/raw")
         self.train_ds = torch.utils.data.Subset(ds, self.train_indices)
         self.val_ds = torch.utils.data.Subset(ds, self.val_indices)
         self.test_ds = torch.utils.data.Subset(ds, self.test_indices)

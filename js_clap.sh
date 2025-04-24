@@ -1,9 +1,10 @@
 #!/bin/sh
-#BSUB -q gpua100
+#BSUB -q gpua40
 #BSUB -gpu "num=1:mode=exclusive_process"
 #BSUB -n 4
 #BSUB -J clap_ee
 #BSUB -W 2:00
+#BSUB -R "span[hosts=1]"
 #BSUB -R "rusage[mem=4GB]"
 #BSUB -u s204141@student.dtu.dk
 #BSUB -B
