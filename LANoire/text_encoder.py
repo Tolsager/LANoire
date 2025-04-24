@@ -108,12 +108,15 @@ class TransEE(L.LightningModule):
         question = text["q"]
         answer = text["a"]
         texts = [f"question: {q} answer: {a}" for q, a in zip(question, answer)]
-        model_input = self.tokenizer(
-            texts, padding=True, truncation=True, return_tensors="pt"
-        )
+        
+        model_input = self.tokenize(texts)
 
         out = self(model_input)
+        preds = F.sigmoid(out)
         loss = self.criterion(out, label)
+        self.log("train_loss", loss, on_epoch=True, on_step=False)
+        self.log("train_acc", accuracy(preds, label, task="binary"), on_epoch=True, on_step=False)
+
         return loss
 
     def validation_step(self, batch):
@@ -124,9 +127,8 @@ class TransEE(L.LightningModule):
         question = text["q"]
         answer = text["a"]
         texts = [f"question: {q} answer: {a}" for q, a in zip(question, answer)]
-        model_input = self.tokenizer(
-            texts, padding=True, truncation=True, return_tensors="pt"
-        )
+
+        model_input = self.tokenize(texts)
 
         out = self(model_input)
         preds = F.sigmoid(out)
@@ -140,9 +142,8 @@ class TransEE(L.LightningModule):
         question = text["q"]
         answer = text["a"]
         texts = [f"question: {q} answer: {a}" for q, a in zip(question, answer)]
-        model_input = self.tokenizer(
-            texts, padding=True, truncation=True, return_tensors="pt"
-        )
+
+        model_input = self.tokenize(texts)
 
         embeddings = self(model_input)
 
@@ -154,4 +155,11 @@ class TransEE(L.LightningModule):
     
     def configure_optimizers(self):
         return torch.optim.AdamW(self.model.parameters(), lr=self.lr)
-        
+
+    def tokenize(self, text_data):
+        model_inputs = self.tokenizer(
+                text_data, padding=True, truncation=True, return_tensors="pt"
+                )
+        model_inputs["input_ids"] = model_inputs["input_ids"].to(self.model.device)
+        model_inputs["attention_mask"] = model_inputs["attention_mask"].to(self.model.device)
+        return model_inputs
