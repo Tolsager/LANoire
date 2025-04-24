@@ -6,9 +6,9 @@ import torch
 import lightning as L
 
 if __name__ == '__main__':
-    video_encoder = LANoire.video_encoder.VideoEncoder()
+    video_encoder = LANoire.video_encoder.VideoEncoder(model_name="facebook/timesformer-base-finetuned-k400")
 
-    ds = LANoire.dataset.LANoireVideoDataset(json_path="data/raw/data.json", bounding_boxes_path="bounding_boxes.pkl")
+    ds = LANoire.dataset.LANoireVideoDataset(json_path="/work3/s204135/data/raw/data.json", bounding_boxes_path="bounding_boxes.pkl")
     dataloader = torch.utils.data.DataLoader(ds, batch_size=10, shuffle=False)
 
     trainer = L.Trainer()
