@@ -209,7 +209,7 @@ class CLAPModel(L.LightningModule):
         save_pickle("data/processed/CLAP_embeddings.pkl", embeddings)
 
 class CLAPModelEE(L.LightningModule):
-    def __init__(self, model_name: str = "laion/clap-htsat-fused", lr: float = 2e-5):
+    def __init__(self, model_name: str = "laion/clap-htsat-fused", lr: float = 2e-5, dropout: float = 0.3):
         super().__init__()
         self.model = transformers.ClapAudioModelWithProjection.from_pretrained(
             model_name
@@ -220,9 +220,11 @@ class CLAPModelEE(L.LightningModule):
         self.val_acc = BinaryAccuracy()
         self.lr = lr
         self.sigmoid = torch.nn.Sigmoid()
+        self.dropout = torch.nn.Dropout(p=dropout)
 
     def forward(self, input_features: torch.Tensor, is_longer: torch.Tensor) -> torch.Tensor:
         embeds = self.model(input_features=input_features, is_longer=is_longer).audio_embeds
+        embeds = self.dropout(embeds)
         return self.fc1(embeds).squeeze(dim=1)
         
     # def test_step(self, batch: dict):

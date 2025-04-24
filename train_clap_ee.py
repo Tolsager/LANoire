@@ -9,12 +9,13 @@ if __name__ == "__main__":
     # num_workers = 0
     max_epochs = 200
     lr = 1e-4
+    dropout = 0.3
 
     dm = ClapEeDm(train_batch_size=batch_size, num_workers=num_workers)
-    model = CLAPModelEE()
+    model = CLAPModelEE(dropout=dropout)
     wandb_logger = utils.setup_logger(
         tags=["unimodal", "audio", "CLAP", "end-to-end"],
-        config={"lr": lr, "batch_size": batch_size},
+        config={"lr": lr, "batch_size": batch_size, "dropout": dropout},
     )
 
     trainer = L.Trainer(
