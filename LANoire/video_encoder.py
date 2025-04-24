@@ -90,7 +90,7 @@ class VideoEncoder(L.LightningModule):
         return output
 
     def test_step(self, batch: tuple):
-        idx, frames = batch
+        frames, label = batch
 
         result = self(frames)
         self.results.append(result.mean(dim=1))
