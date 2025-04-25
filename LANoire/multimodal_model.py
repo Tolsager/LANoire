@@ -357,8 +357,8 @@ class TextAudioVideo(L.LightningModule):
 
     def forward(self, x_text, x_audio, x_video):
         text_features = self.text_model(**x_text)
-        audio_features = self.audio_model(x_audio)
-        video_features = self.video_model(**x_video)
+        audio_features = self.audio_model(**x_audio)
+        video_features = self.video_model(x_video)
         return self.feature_fusion(text_features, audio_features, video_features).squeeze(1)
 
     def training_step(self, batch):
