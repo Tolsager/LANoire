@@ -111,7 +111,7 @@ class VideoMLP(L.LightningModule):
         self.mlp = nn.Sequential(
             nn.Linear(self.embed_dim, hidden_size),
             nn.GELU(),
-            nn.Dropout(0.25),
+            nn.Dropout(0.5),
             nn.Linear(hidden_size, 1),
         )
 

@@ -143,10 +143,16 @@ class LANoireIndexDataset(Dataset):
 
 
 class LANoireVideoDataset(Dataset):
-    def __init__(self, json_path: str = "data/raw/data.json", bounding_boxes_path: str = "bounding_boxes.pkl", num_frames: int = 8):
+    def __init__(self, json_path: str = "data/raw/data.json", num_frames: int = 8, feature_extraction_level: str = "full_image"):
+        match feature_extraction_level:
+            case "full_image":
+                self.data = LANoireDataset(json_path=json_path, data_dir=json_path[:-9], modalities=(Modality.VIDEO,))
+            case "bounding_box":
+                self.data = utils.load_pickle("bounding_boxes.pkl")
+            case _:
+                raise ValueError("Unsupported feature extraction mode")
         data_json = utils.load_json(json_path)
         self.image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base-finetuned-kinetics")
-        self.bounding_boxes = utils.load_pickle(bounding_boxes_path)
         self.answers = data_json["answers"][0]
         self.class_map = {"lie": 0, "truth": 1}
         self.num_frames = num_frames
@@ -155,7 +161,10 @@ class LANoireVideoDataset(Dataset):
         return len(self.answers)
     
     def __getitem__(self, idx):
-        frames = self.bounding_boxes[idx]
+        if isinstance(self.data, LANoireDataset):
+            frames, _ = self.data[idx]
+        else:
+            frames = self.data[idx]
         frames = list(filter(lambda x: x is not None, frames))
         if len(frames) == 0:
             frames.append(np.zeros((224, 224, 3)))
@@ -168,7 +177,7 @@ class LANoireVideoDataset(Dataset):
 
         pixel_values = self.image_processor(frames, return_tensors="pt").pixel_values[0]
 
-        answer = self.answers[f"a{idx+1}"]
+        answer = self.answers[f"a{idx + 1}"]
         label = torch.tensor(self.class_map[answer["class"]], dtype=torch.float32)
 
         return pixel_values, label

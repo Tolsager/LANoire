@@ -4,18 +4,13 @@ import torch
 import lightning as L
 from dotenv import load_dotenv
 
-from utils import get_model_arch
-
-if __name__ == '__main__':
-    # debug
-    # os.environ["WANDB_MODE"] = "offline"
-    # enable_checkpointing = False
-    # max_epochs = 10
+from LANoire.utils import get_model_arch
 
 # debug
 # os.environ["WANDB_MODE"] = "offline"
 # enable_checkpointing = False
 # max_epochs = 10
+
 if __name__ == "__main__":
     enable_checkpointing = True
     max_epochs = 50

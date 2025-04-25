@@ -3,12 +3,12 @@ from LANoire.audio_encoder import ClapEeDm, CLAPModelEE
 import lightning as L
 
 if __name__ == "__main__":
-    batch_size = 48
+    batch_size = 16
     num_workers = 7
     # batch_size = 2
     # num_workers = 0
-    max_epochs = 200
-    lr = 1e-4
+    max_epochs = 100
+    lr = 2e-5
     dropout = 0.3
 
     dm = ClapEeDm(train_batch_size=batch_size, num_workers=num_workers)
