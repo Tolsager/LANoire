@@ -1,4 +1,8 @@
 from enum import IntEnum
+import lightning as L
+import transformers
+import os
+from transformers import AutoTokenizer
 from sklearn.model_selection import train_test_split
 import cv2
 import json
@@ -182,6 +186,95 @@ class LANoireVideoDataset(Dataset):
 
         return pixel_values, label
 
+
+class AllModalityDs(Dataset):
+    def __init__(self):
+        self.CLAP_sr = 48000
+        if os.name == "nt":
+            json_path = "data/raw/data.json"
+        elif os.name == "posix":
+            json_path = "/work3/s204135/data/raw/data.json"
+        self.ds = LANoireDataset(json_path, modalities=(Modality.AUDIO, Modality.TEXT, Modality.VIDEO))
+        self.resampler = torchaudio.transforms.Resample(orig_freq=44_100, new_freq=self.CLAP_sr)
+        self.tokenizer = AutoTokenizer.from_pretrained("roberta-base")
+        self.image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base-finetuned-kinetics")
+        self.processor = transformers.ClapFeatureExtractor.from_pretrained("laion/clap-htsat-fused")
+        self.num_frames = 16
+    
+    def __getitem__(self, idx):
+        row = self.ds[idx]
+        audio = row[1]["answer"]
+        audio = self.resampler(audio)
+        audio_features = self.processor(
+            audio, sampling_rate=self.CLAP_sr, return_tensors="pt"
+        )
+        audio_features["input_features"] = audio_features["input_features"][0]
+        audio_features["is_longer"] = audio_features["is_longer"][0]
+        
+        text = row[0]
+        question = text["q"]
+        answer = text["a"]
+        texts = [f"question: {question} answer: {answer}"]
+        text_features = self.tokenizer(
+            texts, padding="max_length", truncation=True, return_tensors="pt", max_length=100
+        )
+        text_features["input_ids"] = text_features["input_ids"][0]
+        text_features["attention_mask"] = text_features["attention_mask"][0]
+        
+        frames = row[2]
+        if len(frames) == 0:
+            frames.append(np.zeros((224, 224, 3)))
+        frames = frames[:self.num_frames]
+        
+        if len(frames) < self.num_frames:
+            last_frame = frames[-1]
+            for i in range(self.num_frames - len(frames)):
+                frames.append(last_frame)
+
+        pixel_values = self.image_processor(frames, return_tensors="pt").pixel_values[0]
+
+        label = row[3]
+        
+        return audio_features, text_features, pixel_values, label
+        
+        
+        
+class AllModalityDm(L.LightningDataModule):
+    def __init__(
+        self, train_batch_size: int = 32, eval_batch_frac: float = 1.5, **kwargs
+    ):
+        super().__init__()
+        self.train_batch_size = train_batch_size
+        self.eval_batch_size = int(train_batch_size * eval_batch_frac)
+        self.kwargs = kwargs
+        if os.name == "nt":
+            self.json_path = "data/raw/data.json"
+        elif os.name == "posix":
+            self.json_path = "/work3/s204135/data/raw/data.json"
+
+    def setup(self, stage: str = None) -> None:
+        self.train_indices, self.val_indices, self.test_indices = get_data_split_ids(self.json_path)
+        ds = AllModalityDs()
+        self.train_ds = torch.utils.data.Subset(ds, self.train_indices)
+        self.val_ds = torch.utils.data.Subset(ds, self.val_indices)
+        self.test_ds = torch.utils.data.Subset(ds, self.test_indices)
+
+    def train_dataloader(self) -> torch.utils.data.DataLoader:
+        return torch.utils.data.DataLoader(
+            self.train_ds, batch_size=self.train_batch_size, shuffle=True, **self.kwargs
+        )
+
+    def val_dataloader(self) -> torch.utils.data.DataLoader:
+        return torch.utils.data.DataLoader(
+            self.val_ds, batch_size=self.eval_batch_size, **self.kwargs
+        )
+
+    def test_dataloader(self) -> torch.utils.data.DataLoader:
+        return torch.utils.data.DataLoader(
+            self.test_ds, batch_size=self.eval_batch_size, **self.kwargs
+        )
+
+        
 
 if __name__ == '__main__':
     ids = get_data_split_ids()
