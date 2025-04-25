@@ -194,7 +194,7 @@ class AllModalityDs(Dataset):
             json_path = "data/raw/data.json"
         elif os.name == "posix":
             json_path = "/work3/s204135/data/raw/data.json"
-        self.ds = LANoireDataset(json_path, modalities=(Modality.AUDIO, Modality.TEXT, Modality.VIDEO))
+        self.ds = LANoireDataset(json_path, data_dir=json_path[:-9], modalities=(Modality.AUDIO, Modality.TEXT, Modality.VIDEO))
         self.resampler = torchaudio.transforms.Resample(orig_freq=44_100, new_freq=self.CLAP_sr)
         self.tokenizer = AutoTokenizer.from_pretrained("roberta-base")
         self.image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base-finetuned-kinetics")
@@ -216,7 +216,7 @@ class AllModalityDs(Dataset):
         answer = text["a"]
         texts = [f"question: {question} answer: {answer}"]
         text_features = self.tokenizer(
-            texts, padding="max_length", truncation=True, return_tensors="pt", max_length=100
+            texts, padding="max_length", truncation=True, return_tensors="pt", max_length=50
         )
         text_features["input_ids"] = text_features["input_ids"][0]
         text_features["attention_mask"] = text_features["attention_mask"][0]

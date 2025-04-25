@@ -17,8 +17,8 @@ if __name__ == "__main__":
     # max_epochs = 10
     enable_checkpointing = False
     max_epochs = 200
-    batch_size = 2
-    lr = 1e-4
+    batch_size = 16
+    lr = 2e-5
     dropout = 0.2
     weight_decay = 0.1
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     # model = AllCaf(dropout=dropout, weight_decay=weight_decay)
 
     tags = ["videomae", "trimodal", "concat", "CLAP", "roberta"]
-    model = TextAudioVideo(feature_fusion="GMU")
+    model = TextAudioVideo(feature_fusion="CONCAT", lr=lr)
 
     # model_arch = get_model_arch(model, input_size=(1,), dtypes=[torch.long])
     wandb_logger = L.pytorch.loggers.WandbLogger(
@@ -72,6 +72,6 @@ if __name__ == "__main__":
         tags=tags
     )
     trainer = L.Trainer(
-        max_epochs=max_epochs, logger=wandb_logger, callbacks=[checkpoint_callback], fast_dev_run=True
+        max_epochs=max_epochs, logger=wandb_logger, callbacks=[checkpoint_callback], fast_dev_run=False
     )
     trainer.fit(model, datamodule=dm)
