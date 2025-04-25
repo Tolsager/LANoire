@@ -6,6 +6,9 @@ from torchmetrics.classification import BinaryAccuracy
 import wandb
 import torch.nn.functional as F
 
+from transformers import AutoModel, AutoFeatureExtractor
+from torchmetrics.functional import accuracy
+
 class TextAudioCat(L.LightningModule):
     def __init__(self, lr: float = 1e-3, dropout: float = 0.1):
         super().__init__()
@@ -132,3 +135,93 @@ class TextAudioCAF(L.LightningModule):
     def on_validation_epoch_end(self):
         if self.trainer.current_epoch == self.trainer.max_epochs - 1:
             save_pickle("data/processed/wav2vec2_errors.pkl", self.val_wrong)
+
+
+class TextAudioVideo(L.LightningModule):
+    def __init__(
+            self,
+            text_model: str = "roberta-base",
+            audio_model: str = "laion/clap-htsat-fused",
+            video_model: str = "MCG-NJU/videomae-base-finetuned-kinetics",
+            lr: float = 1e-4,
+            feature_fusion: str = "CAF"
+        ):
+        super().__init__()
+
+        self.text_model = AutoModel.from_pretrained(text_model)
+        self.audio_model = AutoFeatureExtractor.from_pretrained(audio_model)
+        self.video_model = AutoModel.from_pretrained(video_model)
+        self.lr = lr
+
+        self.feature_fusion = feature_fusion
+
+        match self.feature_fusion:
+            case "CAF":
+                self.text_projection = torch.nn.Linear(768, 512)
+                self.audio_projection = torch.nn.Linear(512, 512)
+                self.video_projection = torch.nn.Linear(768, 512)
+                self.CAF = CAF(n_features=3, attention_dim=64)
+            case "GMU":
+                self.GMU = ...
+            case "CONCAT":
+                self.projector = torch.nn.Linear(768+512+768, 1)
+
+        self.criterion = torch.nn.BCEWithLogitsLoss()
+
+    def forward(self, x_text, x_audio, x_video):
+        text_features = self.text_model(**x_text)
+        audio_features = self.audio_model(x_audio)
+        video_features = self.video_model(**x_video)
+        fused_features = self.feature_fusion(text_features, audio_features, video_features)
+        return self.classifier(fused_features)
+
+    def training_step(self, batch):
+        
+        out, label = self._shared_step(batch)
+        loss = self.criterion(out, label)
+        pred = F.sigmoid(out)
+        self.log("train_loss", loss, on_epoch=True, on_step=False)
+        self.log("train_acc", accuracy(pred, label, task="binary"), on_epoch=True, on_step=False)
+        return loss
+
+    def validation_step(self, batch):
+        if self.global_step == 0:
+            wandb.define_metric("val_acc", summary="max")
+        out, label = self._shared_step(batch)
+        loss = self.criterion(out, label)
+        pred = F.sigmoid(out)
+        self.log("val_loss", loss)
+        self.log("val_acc", accuracy(pred, label, task="binary"))
+
+    def test_step(self, batch):
+
+        out, label = self._shared_step(batch)
+        pred = F.sigmoid(out)
+
+
+    def _shared_step(self, batch):
+        audio, text, video, label = batch
+        return self(text, audio, video), label
+
+
+    def feature_fusion(self, text_feat, audio_feat, video_feat):
+        match self.feature_fusion:
+            case "CAF":
+                caf_text = self.text_projection(text_feat)
+                caf_audio = self.audio_projection(audio_feat)
+                caf_video = self.video_projection(video_feat)
+                fused_features = self.CAF(caf_text, caf_audio, caf_video)
+                return fused_features
+            case "GMU":
+                ...
+            case "CONCAT":
+                concat_features = torch.cat([text_feat, audio_feat, video_feat], dim=1)
+                return self.projector(concat_features)
+
+        
+        return
+    
+    def configure_optimizers(self):
+        return torch.optim.AdamW(self.parameters(), lr=self.lr)
+
+    

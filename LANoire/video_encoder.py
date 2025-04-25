@@ -97,7 +97,7 @@ class VideoEncoder(L.LightningModule):
 
     def on_test_epoch_end(self):
         embeddings = torch.cat(self.results, dim=0).cpu()
-        utils.save_pickle("video_embeddings_videomae.pkl", embeddings)
+        utils.save_pickle("video_embeddings.pkl", embeddings)
 
 
 class VideoMLP(L.LightningModule):
@@ -111,7 +111,7 @@ class VideoMLP(L.LightningModule):
         self.mlp = nn.Sequential(
             nn.Linear(self.embed_dim, hidden_size),
             nn.GELU(),
-            nn.Dropout(0.5),
+            nn.Dropout(0.25),
             nn.Linear(hidden_size, 1),
         )
 
