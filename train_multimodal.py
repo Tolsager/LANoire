@@ -1,6 +1,7 @@
-from LANoire.multimodal_model import TextAudioCat, TextAudioCAF, TextAudioGmu, TextVideoGmu, TextVideoCat, TextVideoCaf, AudioVideoCaf, AudioVideoCat, AudioVideoGmu, AllCat, AllCaf, AllGmu
+from LANoire.multimodal_model import TextAudioCat, TextAudioCAF, TextAudioGmu, TextVideoGmu, TextVideoCat, TextVideoCaf, AudioVideoCaf, AudioVideoCat, AudioVideoGmu, AllCat, AllCaf, AllGmu, TextAudioVideo
 from LANoire.unimodal_model import EmbeddingDm
 from LANoire.utils import get_model_arch
+from LANoire.dataset import AllModalityDm
 import os
 import torch
 import lightning as L
@@ -16,14 +17,14 @@ if __name__ == "__main__":
     # max_epochs = 10
     enable_checkpointing = False
     max_epochs = 200
-    batch_size = 48
+    batch_size = 2
     lr = 1e-4
     dropout = 0.2
     weight_decay = 0.1
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
         "models", monitor="val_acc", mode="max"
     )
-    dm = EmbeddingDm(train_batch_size=batch_size)
+    dm = AllModalityDm(train_batch_size=batch_size)
 
     # Text + Audio
     # tags = ["CLAP", "roberta", "bimodal", "audio", "text"]
@@ -60,18 +61,17 @@ if __name__ == "__main__":
     # tags = ["videomae", "trimodal", "caf", "CLAP", "roberta"]
     # model = AllCaf(dropout=dropout, weight_decay=weight_decay)
 
-    tags = ["videomae", "trimodal", "gmu", "CLAP", "roberta"]
-    model = AllGmu(dropout=dropout, weight_decay=weight_decay)
+    tags = ["videomae", "trimodal", "concat", "CLAP", "roberta"]
+    model = TextAudioVideo(feature_fusion="GMU")
 
-    model_arch = get_model_arch(model, input_size=(1,), dtypes=[torch.long])
+    # model_arch = get_model_arch(model, input_size=(1,), dtypes=[torch.long])
     wandb_logger = L.pytorch.loggers.WandbLogger(
         project="LANoire",
         entity="pydqn",
-        notes=model_arch,
-        config={"lr": lr, "batch_size": batch_size, "dropout": dropout, "weight_decay": weight_decay},
+        config={"lr": lr, "batch_size": batch_size},
         tags=tags
     )
     trainer = L.Trainer(
-        max_epochs=max_epochs, logger=wandb_logger, callbacks=[checkpoint_callback], fast_dev_run=False
+        max_epochs=max_epochs, logger=wandb_logger, callbacks=[checkpoint_callback], fast_dev_run=True
     )
     trainer.fit(model, datamodule=dm)

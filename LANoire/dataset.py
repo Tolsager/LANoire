@@ -235,7 +235,7 @@ class AllModalityDs(Dataset):
 
         pixel_values = self.image_processor(frames, return_tensors="pt").pixel_values[0]
 
-        label = row[3]
+        label = torch.tensor(row[3], dtype=torch.float32)
         
         return audio_features, text_features, pixel_values, label
         
