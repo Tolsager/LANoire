@@ -7,7 +7,7 @@ from torchmetrics.classification import BinaryAccuracy
 import wandb
 import torch.nn.functional as F
 
-from transformers import AutoModel, AutoFeatureExtractor
+from transformers import AutoModel, ClapAudioModelWithProjection
 from torchmetrics.functional import accuracy
 
 class TextAudioGmu(L.LightningModule):
@@ -335,7 +335,7 @@ class TextAudioVideo(L.LightningModule):
         super().__init__()
 
         self.text_model = AutoModel.from_pretrained(text_model)
-        self.audio_model = AutoFeatureExtractor.from_pretrained(audio_model)
+        self.audio_model = ClapAudioModelWithProjection.from_pretrained(audio_model)
         self.video_model = AutoModel.from_pretrained(video_model)
         self.criterion = torch.nn.BCEWithLogitsLoss()
         self.lr = lr
