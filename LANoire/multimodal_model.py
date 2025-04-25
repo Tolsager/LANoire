@@ -356,10 +356,10 @@ class TextAudioVideo(L.LightningModule):
                 self.projector = torch.nn.Linear(768+512+768, 1)
 
     def forward(self, x_text, x_audio, x_video):
-        text_features = self.text_model(**x_text)
-        audio_features = self.audio_model(**x_audio)
-        video_features = self.video_model(**x_video)
-        return self.feature_fusion(text_features, audio_features, video_features).squeeze(1)
+        text_features = self.text_model(**x_text).logits
+        audio_features = self.audio_model(**x_audio).audio_embeds
+        video_features = self.video_model(x_video).last_hidden_state
+        return self.fuse_features(text_features, audio_features, video_features).squeeze(1)
 
     def training_step(self, batch):
         out, label = self._shared_step(batch)
@@ -387,7 +387,7 @@ class TextAudioVideo(L.LightningModule):
         audio, text, video, label = batch
         return self(text, audio, video), label
 
-    def feature_fusion(self, text_feat, audio_feat, video_feat):
+    def fuse_features(self, text_feat, audio_feat, video_feat):
         match self.feature_fusion:
             case "CAF":
                 caf_text = self.text_projection(text_feat)
