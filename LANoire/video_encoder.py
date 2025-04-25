@@ -96,7 +96,7 @@ class VideoEncoder(L.LightningModule):
         self.results.append(result.mean(dim=1))
 
     def on_test_epoch_end(self):
-        embeddings = torch.cat(self.results, dim=0).cpu
+        embeddings = torch.cat(self.results, dim=0).cpu()
         utils.save_pickle("video_embeddings.pkl", embeddings)
 
 
