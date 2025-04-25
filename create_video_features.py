@@ -10,9 +10,10 @@ if __name__ == '__main__':
     elif os.name == "posix":
         json_path = "/work3/s204135/data/raw/data.json"
     
-    video_encoder = video_encoder.VideoEncoder(model_name="facebook/timesformer-base-finetuned-k400")
+    #video_encoder = video_encoder.VideoEncoder(model_name="facebook/timesformer-base-finetuned-k400")
+    video_encoder = video_encoder.VideoEncoder(model_name="MCG-NJU/videomae-base-finetuned-kinetics")
 
-    ds = dataset.LANoireVideoDataset(json_path=json_path, bounding_boxes_path="bounding_boxes.pkl")
+    ds = dataset.LANoireVideoDataset(json_path=json_path, feature_extraction_level="bounding_box", num_frames=16)
     dataloader = torch.utils.data.DataLoader(ds, batch_size=10, shuffle=False)
 
     trainer = L.Trainer()
