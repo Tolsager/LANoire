@@ -245,14 +245,14 @@ class TextAudioCATee(L.LightningModule):
             wandb.define_metric("val_acc", summary="max")
         x_audio, x_text, y = batch
         y = y.float()
-        pred= self(x_audio, x_text, train=False)
+        pred= self(x_audio, x_text)
         self.val_acc(pred, y.int())
         self.log("val_acc", self.val_acc)
 
     def test_step(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         x_audio, x_text, y = batch
         y = y.float()
-        pred = self(x_audio, x_text, train=False)
+        pred = self(x_audio, x_text)
         self.test_acc(pred, y.int())
         self.log("test_acc", self.test_acc)
 
@@ -303,14 +303,14 @@ class TextAudioGMUee(L.LightningModule):
             wandb.define_metric("val_acc", summary="max")
         x_audio, x_text, y = batch
         y = y.float()
-        pred= self(x_audio, x_text, train=False)
+        pred= self(x_audio, x_text)
         self.val_acc(pred, y.int())
         self.log("val_acc", self.val_acc)
 
     def test_step(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
         x_audio, x_text, y = batch
         y = y.float()
-        pred = self(x_audio, x_text, train=False)
+        pred = self(x_audio, x_text)
         self.test_acc(pred, y.int())
         self.log("test_acc", self.test_acc)
 
@@ -452,7 +452,9 @@ class TextAudioVideo(L.LightningModule):
             audio_model: str = "laion/clap-htsat-fused",
             video_model: str = "MCG-NJU/videomae-base-finetuned-kinetics",
             lr: float = 1e-4,
-            feature_fusion: str = "CAF"
+            feature_fusion: str = "CAF",
+            batch_size: int = 32,
+            temperature: float = 0.5
         ):
         super().__init__()
 
@@ -472,20 +474,24 @@ class TextAudioVideo(L.LightningModule):
                 self.video_projection = torch.nn.Linear(768, 512)
                 self.CAF = CAF(n_features=3, attention_dim=64)
                 self.projector = torch.nn.Linear(512, 1)
+                self.contr_loss = ContrastiveLossELI5(batch_size, temperature)
             case "GMU":
                 self.GMU = TrimodalGMU(768, 512, 768, hidden_size=256)
                 self.projector = torch.nn.Linear(256, 1)
             case "CONCAT":
                 self.projector = torch.nn.Linear(768+512+768, 1)
 
-    def forward(self, x_text, x_audio, x_video):
+    def forward(self, x_text, x_audio, x_video, train_caf: bool = False):
         text_features = self.text_model(**x_text).last_hidden_state[:, 0, :]
         audio_features = self.audio_model(**x_audio).audio_embeds
         video_features = self.video_model(x_video).last_hidden_state[:, 0, :]
-        return self.fuse_features(text_features, audio_features, video_features).squeeze(1)
+        fused = self.fuse_features(text_features, audio_features, video_features).squeeze(1)
+        if train_caf:
+            return fused, audio_features, text_features, video_features
+        return fused
 
     def training_step(self, batch):
-        out, label = self._shared_step(batch)
+        out, audio_feat, text_feat, video_feat, label = self._shared_step(batch)
         loss = self.criterion(out, label)
         pred = F.sigmoid(out)
         self.log("train_loss", loss, on_epoch=True, on_step=False)
@@ -506,9 +512,9 @@ class TextAudioVideo(L.LightningModule):
         pred = F.sigmoid(out)
         self.log("test_acc", accuracy(pred, label, task="binary"))
 
-    def _shared_step(self, batch):
+    def _shared_step(self, batch, caf_train: bool = False):
         audio, text, video, label = batch
-        return self(text, audio, video), label
+        return self(text, audio, video, caf_train), label
 
     def fuse_features(self, text_feat, audio_feat, video_feat):
         match self.feature_fusion:
