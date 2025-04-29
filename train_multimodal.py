@@ -28,9 +28,11 @@ from argparse import ArgumentParser
 if __name__ == "__main__":
     argparser = ArgumentParser()
     argparser.add_argument("-f", "--fusion", default="CONCAT")
+    argparser.add_argument("-m", "--modalities", default=2, type=int)
     args = argparser.parse_args()
 
     fusion = args.fusion
+    modalities = args.modalities
 
     # debug
     # os.environ["WANDB_MODE"] = "offline"
@@ -47,21 +49,30 @@ if __name__ == "__main__":
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
         "/work3/s204135/models", monitor="val_acc", mode="max", filename=fusion + "{epoch}"
     )
-    dm = AllModalityDm(batch_size=batch_size)
+    print(fusion, modalities)
+    if modalities == 3:
+        dm = AllModalityDm(batch_size=batch_size)
+        tags = ["trimodal", fusion, "roberta", "clap", "videomae"]
+        model = TextAudioVideo(feature_fusion=fusion, lr=lr, batch_size=batch_size)
+    elif modalities == 2:
+        dm = BiModalityDm(batch_size=batch_size)
+        tags = ["CLAP", "roberta", "bimodal", "audio", "text", fusion, "end-to-end"]
+        if fusion == "CAF":
+            model = TextAudioCAF(
+                lr=lr, dropout=dropout, weight_decay=weight_decay, batch_size=batch_size, w_contr=w_contr, temperature=temperature
+            )
+        elif fusion == "GMU":
+            model = TextAudioGMUee(
+                lr=lr, dropout=dropout, weight_decay=weight_decay
+            )
+
     # dm = EmbeddingDm(batch_size=batch_size)
     # dm = LANoireIndexDataset(batch_size=batch_size)
-    # dm = BiModalityDm(batch_size=batch_size)
+
 
     # Text + Audio
-    # tags = ["CLAP", "roberta", "bimodal", "audio", "text", "CAF", "end-to-end"]
-    # model = TextAudioCAF(
-    #     lr=lr, dropout=dropout, weight_decay=weight_decay, batch_size=batch_size, w_contr=w_contr, temperature=temperature
-    # )
 
-    # tags = ["CLAP", "roberta", "bimodal", "audio", "text", "gmu", "end-to-end"]
-    # model = TextAudioGMUee(
-    #     lr=lr, dropout=dropout, weight_decay=weight_decay
-    # )
+
 
     # tags = ["CLAP", "roberta", "bimodal", "audio", "text", "cat", "end-to-end"]
     # model = TextAudioCATee(
@@ -92,8 +103,6 @@ if __name__ == "__main__":
     # model = AudioVideoGmu(lr=lr, dropout=dropout, weight_decay=weight_decay)
 
     # All
-    tags = ["trimodal", fusion, "roberta", "clap", "videomae"]
-    model = TextAudioVideo(feature_fusion=fusion, lr=lr, batch_size=batch_size)
 
     # model_arch = get_model_arch(model, input_size=(1,), dtypes=[torch.long])
     wandb_logger = L.pytorch.loggers.WandbLogger(
