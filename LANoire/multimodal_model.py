@@ -144,6 +144,7 @@ class TextAudioCAF(L.LightningModule):
         self.criterion = torch.nn.BCEWithLogitsLoss()
         self.train_acc = BinaryAccuracy()
         self.val_acc = BinaryAccuracy()
+        self.test_acc = BinaryAccuracy()
         self.lr = lr
         self.dropout = torch.nn.Dropout(dropout)
         self.weight_decay = weight_decay
@@ -152,7 +153,7 @@ class TextAudioCAF(L.LightningModule):
         self.text_model = AutoModel.from_pretrained("roberta-base")
         self.audio_model = ClapAudioModelWithProjection.from_pretrained("laion/clap-htsat-fused")
 
-    def forward(self, x_audio, x_text, train: bool=True) -> torch.Tensor:
+    def forward(self, x_audio, x_text, train: bool=False) -> torch.Tensor:
         audio_features = self.audio_model(**x_audio).audio_embeds
         text_features = self.text_model(**x_text).last_hidden_state[:, 0, :]
         text_features = self.text_projector(text_features)
@@ -169,12 +170,6 @@ class TextAudioCAF(L.LightningModule):
         y = y.float()
         pred, audio_emb, text_emb = self(x_audio, x_text, train=True)
         contr_loss = self.contr_loss(audio_emb, text_emb)
-        # text_emb = F.normalize(text_emb, dim=1)
-        # audio_emb = F.normalize(audio_emb, dim=1)
-        # for i in range(text_emb.shape[0]):
-        #     numerator = torch.exp(self.cos_sim(text_emb[i], audio_emb[i]) / self.tau)
-        #     denominator = torch.sum(torch.exp(self.cos_sim(text_emb[i], audio_emb)) / self.tau)
-        #     cotrs_loss += -torch.log(numerator) + torch.log(denominator)
         clf_loss = self.criterion(pred, y)
         loss = clf_loss + self.w_contr * contr_loss
         self.train_acc(self.sigmoid(pred), y.int())
@@ -193,22 +188,13 @@ class TextAudioCAF(L.LightningModule):
         self.val_acc(pred, y.int())
         self.log("val_acc", self.val_acc)
 
-        # if self.trainer.current_epoch == self.trainer.max_epochs - 1:
-        #     pred = self.sigmoid(pred) > 0.5
-        #     self.val_wrong.extend(x[pred != y].tolist())
-
     def test_step(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
-        x, y = batch
+        x_audio, x_text, y = batch
         y = y.float()
-        pred = self(x)
-        self.val_acc(pred, y.int())
-        loss = self.criterion(pred, y)
-        self.log("val_acc", self.val_acc)
-        self.log("val_loss", loss)
+        pred = self(x_audio, x_text, train=False)
+        self.test_acc(pred, y.int())
+        self.log("test_acc", self.test_acc)
 
-        if self.trainer.current_epoch == self.trainer.max_epochs - 1:
-            pred = self.sigmoid(pred) > 0.5
-            self.val_wrong.extend(x[pred != y].tolist())
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
@@ -216,6 +202,121 @@ class TextAudioCAF(L.LightningModule):
     #     if self.trainer.current_epoch == self.trainer.max_epochs - 1:
     #         save_pickle("data/processed/wav2vec2_errors.pkl", self.val_wrong)
     
+class TextAudioCATee(L.LightningModule):
+    def __init__(self, lr: float = 1e-3, dropout: float = 0.1, weight_decay: float = 0.01):
+        super().__init__()
+        self.sigmoid = torch.nn.Sigmoid()
+        self.fc1 = torch.nn.Linear(768+512, 1)
+        self.criterion = torch.nn.BCEWithLogitsLoss()
+        self.train_acc = BinaryAccuracy()
+        self.val_acc = BinaryAccuracy()
+        self.test_acc = BinaryAccuracy()
+        self.lr = lr
+        self.dropout = torch.nn.Dropout(dropout)
+        self.weight_decay = weight_decay
+        self.val_wrong = []
+        self.text_model = AutoModel.from_pretrained("roberta-base")
+        self.audio_model = ClapAudioModelWithProjection.from_pretrained("laion/clap-htsat-fused")
+
+    def forward(self, x_audio, x_text) -> torch.Tensor:
+        audio_features = self.audio_model(**x_audio).audio_embeds
+        text_features = self.text_model(**x_text).last_hidden_state[:, 0, :]
+        x = torch.cat([audio_features, text_features])
+        x = self.dropout(x)
+        x = self.fc1(x)
+        return x.squeeze(dim=1)
+
+    def training_step(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        self.text_model.train()
+        self.audio_model.train()
+        x_audio, x_text, y = batch
+        y = y.float()
+        pred = self(x_audio, x_text)
+        loss = self.criterion(pred, y)
+        self.train_acc(self.sigmoid(pred), y.int())
+        self.log("train_acc", self.train_acc, on_epoch=True, on_step=False)
+        self.log("train_loss", loss, on_epoch=True, on_step=False)
+        return loss
+
+    def validation_step(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        self.text_model.eval()
+        self.audio_model.eval()
+        if self.global_step == 0:
+            wandb.define_metric("val_acc", summary="max")
+        x_audio, x_text, y = batch
+        y = y.float()
+        pred= self(x_audio, x_text, train=False)
+        self.val_acc(pred, y.int())
+        self.log("val_acc", self.val_acc)
+
+    def test_step(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        x_audio, x_text, y = batch
+        y = y.float()
+        pred = self(x_audio, x_text, train=False)
+        self.test_acc(pred, y.int())
+        self.log("test_acc", self.test_acc)
+
+    def configure_optimizers(self):
+        return torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+
+class TextAudioGMUee(L.LightningModule):
+    def __init__(self, lr: float = 1e-3, dropout: float = 0.1, weight_decay: float = 0.01):
+        super().__init__()
+        self.sigmoid = torch.nn.Sigmoid()
+        self.fc = torch.nn.Linear(200, 1)
+        self.criterion = torch.nn.BCEWithLogitsLoss()
+        self.train_acc = BinaryAccuracy()
+        self.val_acc = BinaryAccuracy()
+        self.test_acc = BinaryAccuracy()
+        self.gmu = BimodalGMU(768, 512)
+        self.lr = lr
+        self.dropout = torch.nn.Dropout(dropout)
+        self.weight_decay = weight_decay
+        self.val_wrong = []
+        self.text_model = AutoModel.from_pretrained("roberta-base")
+        self.audio_model = ClapAudioModelWithProjection.from_pretrained("laion/clap-htsat-fused")
+
+    def forward(self, x_audio, x_text) -> torch.Tensor:
+        audio_features = self.audio_model(**x_audio).audio_embeds
+        text_features = self.text_model(**x_text).last_hidden_state[:, 0, :]
+        x = self.gmu(text_features, audio_features)
+        x = self.dropout(x)
+        x = self.fc(x)
+        return x.squeeze(1)
+
+    def training_step(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        self.text_model.train()
+        self.audio_model.train()
+        x_audio, x_text, y = batch
+        y = y.float()
+        pred = self(x_audio, x_text)
+        loss = self.criterion(pred, y)
+        self.train_acc(self.sigmoid(pred), y.int())
+        self.log("train_acc", self.train_acc, on_epoch=True, on_step=False)
+        self.log("train_loss", loss, on_epoch=True, on_step=False)
+        return loss
+
+    def validation_step(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        self.text_model.eval()
+        self.audio_model.eval()
+        if self.global_step == 0:
+            wandb.define_metric("val_acc", summary="max")
+        x_audio, x_text, y = batch
+        y = y.float()
+        pred= self(x_audio, x_text, train=False)
+        self.val_acc(pred, y.int())
+        self.log("val_acc", self.val_acc)
+
+    def test_step(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        x_audio, x_text, y = batch
+        y = y.float()
+        pred = self(x_audio, x_text, train=False)
+        self.test_acc(pred, y.int())
+        self.log("test_acc", self.test_acc)
+
+    def configure_optimizers(self):
+        return torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+
 class TextVideoGmu(L.LightningModule):
     def __init__(self, lr: float = 1e-3, dropout: float = 0.1, weight_decay: float = 0.2):
         super().__init__()

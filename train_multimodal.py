@@ -12,6 +12,8 @@ from LANoire.multimodal_model import (
     AllCaf,
     AllGmu,
     TextAudioVideo,
+    TextAudioGMUee,
+    TextAudioCATee
 )
 from LANoire.unimodal_model import EmbeddingDm
 from LANoire.utils import get_model_arch
@@ -51,9 +53,19 @@ if __name__ == "__main__":
     dm = BiModalityDm(batch_size=batch_size)
 
     # Text + Audio
-    tags = ["CLAP", "roberta", "bimodal", "audio", "text", "CAF"]
+    tags = ["CLAP", "roberta", "bimodal", "audio", "text", "CAF", "end-to-end"]
     model = TextAudioCAF(
         lr=lr, dropout=dropout, weight_decay=weight_decay, batch_size=batch_size, w_contr=w_contr, temperature=temperature
+    )
+
+    tags = ["CLAP", "roberta", "bimodal", "audio", "text", "gmu", "end-to-end"]
+    model = TextAudioGMUee(
+        lr=lr, dropout=dropout, weight_decay=weight_decay
+    )
+
+    tags = ["CLAP", "roberta", "bimodal", "audio", "text", "cat", "end-to-end"]
+    model = TextAudioCATee(
+        lr=lr, dropout=dropout, weight_decay=weight_decay
     )
 
     # tags = ["CLAP", "roberta", "bimodal", "audio", "text", "gmu"]
