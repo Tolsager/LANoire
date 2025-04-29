@@ -221,7 +221,7 @@ class TextAudioCATee(L.LightningModule):
     def forward(self, x_audio, x_text) -> torch.Tensor:
         audio_features = self.audio_model(**x_audio).audio_embeds
         text_features = self.text_model(**x_text).last_hidden_state[:, 0, :]
-        x = torch.cat([audio_features, text_features])
+        x = torch.cat([audio_features, text_features], dim=1)
         x = self.dropout(x)
         x = self.fc1(x)
         return x.squeeze(dim=1)
@@ -485,14 +485,37 @@ class TextAudioVideo(L.LightningModule):
         text_features = self.text_model(**x_text).last_hidden_state[:, 0, :]
         audio_features = self.audio_model(**x_audio).audio_embeds
         video_features = self.video_model(x_video).last_hidden_state[:, 0, :]
+        if self.feature_fusion == "CAF":
+            text_features = self.text_projection(text_features)
+            audio_features = self.audio_projection(audio_features)
+            video_features = self.video_projection(video_features)
         fused = self.fuse_features(text_features, audio_features, video_features).squeeze(1)
         if train_caf:
             return fused, audio_features, text_features, video_features
         return fused
 
+    def on_train_epoch_start(self):
+        self.text_model.train()
+        self.video_model.train()
+        self.audio_model.train()
+    
+    def on_validation_epoch_start(self):
+        self.text_model.eval()
+        self.video_model.eval()
+        self.audio_model.eval()
+
+
     def training_step(self, batch):
-        out, audio_feat, text_feat, video_feat, label = self._shared_step(batch)
-        loss = self.criterion(out, label)
+        if self.feature_fusion == "CAF":
+            (out, audio_feat, text_feat, video_feat), label = self._shared_step(batch, caf_train=True)
+        else:
+            out, label = self._shared_step(batch)
+
+        audio_text_loss = self.contr_loss(audio_feat, text_feat)
+        audio_video_loss = self.contr_loss(audio_feat, video_feat)
+        text_video_loss = self.contr_loss(text_feat, video_feat)
+
+        loss = self.criterion(out, label) + 0.1 * 1/3 * (audio_text_loss + audio_video_loss + text_video_loss)
         pred = F.sigmoid(out)
         self.log("train_loss", loss, on_epoch=True, on_step=False)
         self.log("train_acc", accuracy(pred, label, task="binary"), on_epoch=True, on_step=False)
@@ -519,10 +542,7 @@ class TextAudioVideo(L.LightningModule):
     def fuse_features(self, text_feat, audio_feat, video_feat):
         match self.feature_fusion:
             case "CAF":
-                caf_text = self.text_projection(text_feat)
-                caf_audio = self.audio_projection(audio_feat)
-                caf_video = self.video_projection(video_feat)
-                caf_features = self.CAF(caf_text, caf_audio, caf_video)
+                caf_features = self.CAF(text_feat, audio_feat, video_feat)
                 return self.projector(self.dropout(caf_features))
             case "GMU":
                 gmu_features = self.GMU(text_feat, audio_feat, video_feat)
