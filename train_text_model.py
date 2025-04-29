@@ -1,7 +1,7 @@
 from LANoire import dataset, text_encoder, utils
 from torch.utils.data import Subset, DataLoader
 import torch
-from utils import get_model_arch
+from LANoire.utils import get_model_arch
 import lightning as L
 import wandb
 
@@ -22,7 +22,7 @@ if __name__ == "__main__":
         num_workers=3,
         persistent_workers=True,
     )
-    test_dataloader = DataLoader(test_set, batch_size=48, shuffle=False, num_workers=3)
+    test_dataloader = DataLoader(test_set, batch_size=48, shuffle=False, num_workers=0)
 
     max_epochs = 400
 
@@ -50,11 +50,15 @@ if __name__ == "__main__":
         note=model_arch,
     )
 
+    checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
+        "models", monitor="val_acc", mode="max"
+    )
     trainer = L.Trainer(
-        max_epochs=max_epochs, logger=wandb_logger if not debug else None
+        max_epochs=max_epochs, logger=wandb_logger if not debug else None, callbacks=[checkpoint_callback]
     )
     trainer.fit(
         model=model,
         train_dataloaders=train_dataloader,
         val_dataloaders=validation_dataloader,
     )
+    trainer.test(dataloaders=test_dataloader, ckpt_path="best")

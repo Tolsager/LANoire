@@ -173,11 +173,10 @@ class ClapMlp(L.LightningModule):
 
 class EmbeddingDm(L.LightningDataModule):
     def __init__(
-        self, train_batch_size: int = 32, eval_batch_frac: float = 1.5, **kwargs
+        self, batch_size: int = 32, **kwargs
     ):
         super().__init__()
-        self.train_batch_size = train_batch_size
-        self.eval_batch_size = int(train_batch_size * eval_batch_frac)
+        self.batch_size = batch_size
         self.kwargs = kwargs
 
     def setup(self, stage: str = None) -> None:
@@ -189,17 +188,17 @@ class EmbeddingDm(L.LightningDataModule):
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
-            self.train_ds, batch_size=self.train_batch_size, shuffle=True, **self.kwargs
+            self.train_ds, batch_size=self.batch_size, shuffle=True, **self.kwargs
         )
 
     def val_dataloader(self) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
-            self.val_ds, batch_size=self.eval_batch_size, **self.kwargs
+            self.val_ds, batch_size=self.batch_size, **self.kwargs
         )
 
     def test_dataloader(self) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
-            self.test_ds, batch_size=self.eval_batch_size, **self.kwargs
+            self.test_ds, batch_size=self.batch_size, **self.kwargs
         )
 
 
