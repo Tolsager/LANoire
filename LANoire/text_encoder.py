@@ -95,6 +95,7 @@ class TransEE(L.LightningModule):
         super().__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = RobertaForSequenceClassification.from_pretrained(model_name, num_labels=1)
+        self.model.train()
         self.lr = lr
         self.criterion = torch.nn.BCEWithLogitsLoss()
 

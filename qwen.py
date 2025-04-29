@@ -14,3 +14,4 @@ query = tokenizer.from_list_format([
 ])
 response, history = model.chat(tokenizer, query=query, history=None)
 print(response)
+

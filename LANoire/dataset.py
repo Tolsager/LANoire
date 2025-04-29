@@ -200,6 +200,7 @@ class AllModalityDs(Dataset):
         self.image_processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base-finetuned-kinetics")
         self.processor = transformers.ClapFeatureExtractor.from_pretrained("laion/clap-htsat-fused")
         self.num_frames = 16
+        self.bboxes = utils.load_pickle("bounding_boxes.pkl")
     
     def __getitem__(self, idx):
         row = self.ds[idx]
@@ -221,7 +222,8 @@ class AllModalityDs(Dataset):
         text_features["input_ids"] = text_features["input_ids"][0]
         text_features["attention_mask"] = text_features["attention_mask"][0]
         
-        frames = row[2]
+        frames = self.bboxes[idx]
+        frames = list(filter(lambda x: x is not None, frames))
         if len(frames) == 0:
             frames.append(np.zeros((224, 224, 3)))
         frames = frames[:self.num_frames]

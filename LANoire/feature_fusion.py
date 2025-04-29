@@ -30,7 +30,7 @@ class CAF(nn.Module):
         super().__init__()
         self.attention_dim = attention_dim
         self.SA = CA_SA(dim=attention_dim)
-        self.CAs = [CA_SA(dim=attention_dim) for _ in range(n_features)]
+        self.CAs = nn.ModuleList([CA_SA(dim=attention_dim) for _ in range(n_features)])
         self.n_features = n_features
     
     def forward(self, *features):
@@ -38,6 +38,7 @@ class CAF(nn.Module):
         b = features[0].shape[0]
         F_U = torch.cat([F.normalize(f, dim=-1) for f in features], dim=-1)
         F_U = F_U.view(b, -1, self.attention_dim)
+       
         feat_Z = [self.CAs[i](F_U, f.view(b, -1, self.attention_dim)) for i, f in enumerate(features)]
 
         feat = sum(feat_Z)

@@ -339,6 +339,7 @@ class TextAudioVideo(L.LightningModule):
         self.video_model = AutoModel.from_pretrained(video_model)
         self.criterion = torch.nn.BCEWithLogitsLoss()
         self.lr = lr
+        self.dropout = torch.nn.Dropout(p=0.25)
 
         self.feature_fusion = feature_fusion
 
@@ -394,13 +395,13 @@ class TextAudioVideo(L.LightningModule):
                 caf_audio = self.audio_projection(audio_feat)
                 caf_video = self.video_projection(video_feat)
                 caf_features = self.CAF(caf_text, caf_audio, caf_video)
-                return self.projector(caf_features)
+                return self.projector(self.dropout(caf_features))
             case "GMU":
                 gmu_features = self.GMU(text_feat, audio_feat, video_feat)
-                return self.projector(gmu_features)
+                return self.projector(self.dropout(gmu_features))
             case "CONCAT":
                 concat_features = torch.cat([text_feat, audio_feat, video_feat], dim=1)
-                return self.projector(concat_features)
+                return self.projector(self.dropout(concat_features))
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.parameters(), lr=self.lr)

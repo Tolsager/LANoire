@@ -7,22 +7,25 @@ import torch
 import lightning as L
 from dotenv import load_dotenv
 
-
-
+from argparse import ArgumentParser
 
 if __name__ == "__main__":
+    argparser = ArgumentParser()
+    argparser.add_argument("-f", "--fusion", default="CONCAT")
+    args = argparser.parse_args()
+
+    fusion = args.fusion
+
     # debug
     # os.environ["WANDB_MODE"] = "offline"
     # enable_checkpointing = False
     # max_epochs = 10
     enable_checkpointing = False
-    max_epochs = 200
-    batch_size = 16
+    max_epochs = 50
+    batch_size = 8
     lr = 2e-5
-    dropout = 0.2
-    weight_decay = 0.1
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
-        "models", monitor="val_acc", mode="max"
+        "/work3/s204135/models", monitor="val_acc", mode="max", filename=fusion + "{epoch}"
     )
     dm = AllModalityDm(train_batch_size=batch_size)
 
@@ -61,8 +64,8 @@ if __name__ == "__main__":
     # tags = ["videomae", "trimodal", "caf", "CLAP", "roberta"]
     # model = AllCaf(dropout=dropout, weight_decay=weight_decay)
 
-    tags = ["videomae", "trimodal", "concat", "CLAP", "roberta"]
-    model = TextAudioVideo(feature_fusion="CONCAT", lr=lr)
+    tags = ["trimodal", fusion, "roberta", "clap", "videomae"]
+    model = TextAudioVideo(feature_fusion=fusion, lr=lr)
 
     # model_arch = get_model_arch(model, input_size=(1,), dtypes=[torch.long])
     wandb_logger = L.pytorch.loggers.WandbLogger(
@@ -75,3 +78,4 @@ if __name__ == "__main__":
         max_epochs=max_epochs, logger=wandb_logger, callbacks=[checkpoint_callback], fast_dev_run=False
     )
     trainer.fit(model, datamodule=dm)
+    trainer.test(datamodule=dm)

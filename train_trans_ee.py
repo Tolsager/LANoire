@@ -3,7 +3,7 @@ from torch.utils.data import Subset, DataLoader
 import lightning as L
 
 if __name__ == "__main__":
-    batch_size = 48
+    batch_size = 32
     lr = 5e-5
     max_epochs = 50
     train_ids, validation_ids, test_ids = dataset.get_data_split_ids("/work3/s204135/data/raw/data.json")
