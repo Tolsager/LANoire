@@ -12,16 +12,16 @@ if __name__ == "__main__":
     validation_set = Subset(ds, indices=validation_ids)
     test_set = Subset(ds, indices=test_ids)
     train_dataloader = DataLoader(
-        train_set, batch_size=batch_size, shuffle=True, num_workers=3, persistent_workers=True
+        train_set, batch_size=batch_size, shuffle=True, num_workers=7, persistent_workers=True
     )
     validation_dataloader = DataLoader(
         validation_set,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=3,
+        num_workers=7,
         persistent_workers=True,
     )
-    test_dataloader = DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=3)
+    test_dataloader = DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=7)
 
     model_name = "roberta-base"
     model = text_encoder.TransEE(lr=lr)
@@ -31,11 +31,16 @@ if __name__ == "__main__":
         config={"lr": lr, "batch_size": batch_size},
     )
 
+    
+    checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
+        "/work3/s204135/models", monitor="val_acc", mode="max", filename="roberta_EE_{epoch}"
+    )
     trainer = L.Trainer(
-        max_epochs=max_epochs, logger=wandb_logger, fast_dev_run=False
+        max_epochs=max_epochs, logger=wandb_logger, callbacks=[checkpoint_callback],fast_dev_run=False
     )
     trainer.fit(
         model=model,
         train_dataloaders=train_dataloader,
         val_dataloaders=validation_dataloader,
     )
+    trainer.test(dataloaders=test_dataloader)

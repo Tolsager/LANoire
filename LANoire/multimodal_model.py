@@ -163,6 +163,8 @@ class TextAudioCAF(L.LightningModule):
         return x.squeeze(dim=1)
 
     def training_step(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        self.text_model.train()
+        self.audio_model.train()
         x_audio, x_text, y = batch
         y = y.float()
         pred, audio_emb, text_emb = self(x_audio, x_text, train=True)
@@ -181,6 +183,8 @@ class TextAudioCAF(L.LightningModule):
         return loss
 
     def validation_step(self, batch: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        self.text_model.eval()
+        self.audio_model.eval()
         if self.global_step == 0:
             wandb.define_metric("val_acc", summary="max")
         x_audio, x_text, y = batch

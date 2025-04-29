@@ -283,11 +283,10 @@ class BiModalityDs(Dataset):
             json_path = "data/raw/data.json"
         elif os.name == "posix":
             json_path = "/work3/s204135/data/raw/data.json"
-        self.ds = LANoireDataset(json_path, modalities=(Modality.AUDIO, Modality.TEXT))
+        self.ds = LANoireDataset(json_path, data_dir=json_path[:-9], modalities=(Modality.AUDIO, Modality.TEXT))
         self.resampler = torchaudio.transforms.Resample(orig_freq=44_100, new_freq=self.CLAP_sr)
         self.tokenizer = AutoTokenizer.from_pretrained("roberta-base")
         self.processor = transformers.ClapFeatureExtractor.from_pretrained("laion/clap-htsat-fused")
-        self.bboxes = utils.load_pickle("bounding_boxes.pkl")
     
     def __getitem__(self, idx):
         row = self.ds[idx]
@@ -320,6 +319,7 @@ class BiModalityDm(L.LightningDataModule):
         super().__init__()
         self.batch_size = batch_size
         self.kwargs = kwargs
+
         if os.name == "nt":
             self.json_path = "data/raw/data.json"
         elif os.name == "posix":
@@ -334,7 +334,7 @@ class BiModalityDm(L.LightningDataModule):
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
-            self.train_ds, batch_size=self.batch_size, shuffle=True, **self.kwargs
+            self.train_ds, batch_size=self.batch_size, shuffle=True, **self.kwargs, drop_last=True
         )
 
     def val_dataloader(self) -> torch.utils.data.DataLoader:

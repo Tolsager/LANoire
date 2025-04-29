@@ -36,7 +36,7 @@ if __name__ == "__main__":
     # max_epochs = 10
     enable_checkpointing = False
     max_epochs = 200
-    batch_size = 64
+    batch_size = 32
     lr = 1e-4
     dropout = 0.2
     weight_decay = 0.1

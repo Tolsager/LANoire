@@ -104,7 +104,6 @@ class TransEE(L.LightningModule):
         super().__init__()
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = RobertaForSequenceClassification.from_pretrained(model_name, num_labels=1)
-        self.model.train()
         self.lr = lr
         self.criterion = torch.nn.BCEWithLogitsLoss()
 
@@ -113,6 +112,7 @@ class TransEE(L.LightningModule):
         return output.logits.squeeze(dim=1)
     
     def training_step(self, batch):
+        self.model.train()
         text, label = batch
         label = label.float()
         question = text["q"]
@@ -130,6 +130,7 @@ class TransEE(L.LightningModule):
         return loss
 
     def validation_step(self, batch):
+        self.model.eval()
         if self.global_step == 0:
             wandb.define_metric("val_acc", summary="max")
         text, label = batch
@@ -154,15 +155,12 @@ class TransEE(L.LightningModule):
         texts = [f"question: {q} answer: {a}" for q, a in zip(question, answer)]
 
         model_input = self.tokenize(texts)
+        
+        out = self(model_input)
 
-        embeddings = self(model_input)
+        preds = F.sigmoid(out)
+        self.log("test_acc", accuracy(preds, label, task="binary"))
 
-        self.embedding_outputs.append(embeddings[:, 0, :])
-
-    def on_test_epoch_end(self):
-        embeddings = torch.cat(self.embedding_outputs, dim=0)
-        save_pickle(f"data/processed/{self.embed_name}", embeddings)
-    
     def configure_optimizers(self):
         return torch.optim.AdamW(self.model.parameters(), lr=self.lr)
 
