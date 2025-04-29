@@ -243,11 +243,10 @@ class AllModalityDs(Dataset):
         
 class AllModalityDm(L.LightningDataModule):
     def __init__(
-        self, train_batch_size: int = 32, eval_batch_frac: float = 1.5, **kwargs
+        self, batch_size: int = 32, eval_batch_frac: float = 1.5, **kwargs
     ):
         super().__init__()
-        self.train_batch_size = train_batch_size
-        self.eval_batch_size = int(train_batch_size * eval_batch_frac)
+        self.batch_size = batch_size
         self.kwargs = kwargs
         if os.name == "nt":
             self.json_path = "data/raw/data.json"
@@ -263,20 +262,90 @@ class AllModalityDm(L.LightningDataModule):
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
-            self.train_ds, batch_size=self.train_batch_size, shuffle=True, **self.kwargs
+            self.train_ds, batch_size=self.batch_size, shuffle=True, **self.kwargs
         )
 
     def val_dataloader(self) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
-            self.val_ds, batch_size=self.eval_batch_size, **self.kwargs
+            self.val_ds, batch_size=self.batch_size, **self.kwargs
         )
 
     def test_dataloader(self) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
-            self.test_ds, batch_size=self.eval_batch_size, **self.kwargs
+            self.test_ds, batch_size=self.batch_size, **self.kwargs
         )
 
         
+class BiModalityDs(Dataset):
+    def __init__(self):
+        self.CLAP_sr = 48000
+        if os.name == "nt":
+            json_path = "data/raw/data.json"
+        elif os.name == "posix":
+            json_path = "/work3/s204135/data/raw/data.json"
+        self.ds = LANoireDataset(json_path, modalities=(Modality.AUDIO, Modality.TEXT))
+        self.resampler = torchaudio.transforms.Resample(orig_freq=44_100, new_freq=self.CLAP_sr)
+        self.tokenizer = AutoTokenizer.from_pretrained("roberta-base")
+        self.processor = transformers.ClapFeatureExtractor.from_pretrained("laion/clap-htsat-fused")
+        self.bboxes = utils.load_pickle("bounding_boxes.pkl")
+    
+    def __getitem__(self, idx):
+        row = self.ds[idx]
+        audio = row[1]["answer"]
+        audio = self.resampler(audio)
+        audio_features = self.processor(
+            audio, sampling_rate=self.CLAP_sr, return_tensors="pt"
+        )
+        audio_features["input_features"] = audio_features["input_features"][0]
+        audio_features["is_longer"] = audio_features["is_longer"][0]
+        
+        text = row[0]
+        question = text["q"]
+        answer = text["a"]
+        texts = [f"question: {question} answer: {answer}"]
+        text_features = self.tokenizer(
+            texts, padding="max_length", truncation=True, return_tensors="pt", max_length=100
+        )
+        text_features["input_ids"] = text_features["input_ids"][0]
+        text_features["attention_mask"] = text_features["attention_mask"][0]
+
+        label = torch.tensor(row[2], dtype=torch.float32)
+        
+        return audio_features, text_features, label
+
+class BiModalityDm(L.LightningDataModule):
+    def __init__(
+        self, batch_size: int = 32, **kwargs
+    ):
+        super().__init__()
+        self.batch_size = batch_size
+        self.kwargs = kwargs
+        if os.name == "nt":
+            self.json_path = "data/raw/data.json"
+        elif os.name == "posix":
+            self.json_path = "/work3/s204135/data/raw/data.json"
+
+    def setup(self, stage: str = None) -> None:
+        self.train_indices, self.val_indices, self.test_indices = get_data_split_ids(self.json_path)
+        ds = BiModalityDs()
+        self.train_ds = torch.utils.data.Subset(ds, self.train_indices)
+        self.val_ds = torch.utils.data.Subset(ds, self.val_indices)
+        self.test_ds = torch.utils.data.Subset(ds, self.test_indices)
+
+    def train_dataloader(self) -> torch.utils.data.DataLoader:
+        return torch.utils.data.DataLoader(
+            self.train_ds, batch_size=self.batch_size, shuffle=True, **self.kwargs
+        )
+
+    def val_dataloader(self) -> torch.utils.data.DataLoader:
+        return torch.utils.data.DataLoader(
+            self.val_ds, batch_size=self.batch_size, **self.kwargs
+        )
+
+    def test_dataloader(self) -> torch.utils.data.DataLoader:
+        return torch.utils.data.DataLoader(
+            self.test_ds, batch_size=self.batch_size, **self.kwargs
+        )
 
 if __name__ == '__main__':
     ids = get_data_split_ids()

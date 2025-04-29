@@ -56,6 +56,7 @@ class TextMLP(L.LightningModule):
             # nn.Dropout(p=0.15),
             nn.Linear(hidden_size, 1)
         )
+        self.test_wrong = []
 
     def forward(self, idx: torch.tensor):
         embeds = self.embeds(idx)
@@ -85,7 +86,15 @@ class TextMLP(L.LightningModule):
         inputs, targets = batch
         output = self(inputs).squeeze(1)
         loss = self.criterion(output, targets)
+        preds = F.sigmoid(output)
+        self.log("test_acc", accuracy(preds, targets, task="binary"), on_step=False, on_epoch=True)
         self.log("test_loss", loss)
+
+        preds = F.sigmoid(preds) > 0.5
+        self.test_wrong.extend(inputs[preds != targets].tolist())
+
+    def on_test_epoch_end(self):
+        save_pickle("data/processed/roberta_test_errors.pkl", self.test_wrong)
 
     def configure_optimizers(self):
         return torch.optim.AdamW(self.mlp.parameters(), lr=1e-4)

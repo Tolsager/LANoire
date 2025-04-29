@@ -20,7 +20,7 @@ if __name__ == "__main__":
     checkpoint_callback = L.pytorch.callbacks.ModelCheckpoint(
         "models", monitor="val_acc", mode="max"
     )
-    dm = EmbeddingDm(train_batch_size=batch_size)
+    dm = EmbeddingDm(batch_size=batch_size)
     # CLAP
     # tags = ["CLAP", "unimodal", "audio"]
     # model = ClapMlp(lr=lr, dropout=dropout)
